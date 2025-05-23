@@ -1,0 +1,44 @@
+from rest_framework.serializers import ModelSerializer, CharField, ValidationError , ImageField
+from django.contrib.auth.models import User
+
+from app.models import ContactList, UserProfile
+
+
+
+class SignupSerializer(ModelSerializer):
+    password = CharField(write_only=True)
+    password2 = CharField(write_only=True)  # Confirm password
+
+    class Meta:
+        model = User
+        fields = ('username', 'password', 'password2', 'email', 'first_name', 'last_name')
+
+    def validate(self, data):
+        if data['password'] != data['password2']:
+            raise ValidationError("Passwords do not match.")
+        return data
+
+    def create(self, validated_data):
+        validated_data.pop('password2')
+        user = User.objects.create_user(**validated_data)
+        return user
+
+
+
+class ContactListSerializer(ModelSerializer):
+    login_user = CharField(source='user.username', read_only=True)
+    name = CharField(source='contacts.username', read_only=True)
+    avatar = ImageField(source='contacts.userprofile.profile_photo', read_only=True)  # get profile photo of contact user
+
+    class Meta:
+        model = ContactList
+        fields = ['login_user', 'name', 'avatar']
+
+
+
+class PrivateKeySerializer ( ModelSerializer) : 
+
+    class Meta : 
+
+        model = UserProfile
+        fields = ['private_key']
