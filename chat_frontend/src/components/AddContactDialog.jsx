@@ -34,12 +34,8 @@ export default function AddContactDialog({ open, onClose, onContactAdded }) {
       (async () => {
         try {
           const res = await api.get('/user/private-key/');
-          if (res.data && res.data.privateKey) {
-            console.log('Fetched private key:', res);
-            setPrivateKey(res.data.privateKey);
-          } else {
-            setPrivateKey('demo-private-key');
-          }
+            console.log('Fetched private key:', res.data.private_key);
+            setPrivateKey(res.data.private_key);
         } catch {
           setPrivateKey('demo-private-key');
         }
@@ -149,19 +145,36 @@ export default function AddContactDialog({ open, onClose, onContactAdded }) {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('privateKey', manualPrivateKey.trim());
+    const payload = {
+    privateKey: manualPrivateKey.trim(),
+    };
 
     setSubmitting(true);
-    try {
-      await api.post('/contacts/', formData);
-      onContactAdded();
-      onClose();
-    } catch (error) {
-      alert('Failed to add contact');
-    } finally {
-      setSubmitting(false);
+  try {
+    await api.post('/contacts/', payload, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    onContactAdded();
+    alert('Contact added successfully!');
+    setManualPrivateKey('');
+    stopScan();
+    onClose();
+  } catch (error) {
+
+    if (error.response && error.response.status === 409) {
+
+      alert('Contact is already exist' , error.message);
+      
+
     }
+
+    alert('Failed to add contact. Check Private key.');
+    console.error('Error adding contact:', error);
+  } finally {
+    setSubmitting(false);
+  }
   };
 
   return (

@@ -120,11 +120,24 @@ class ContactListView(APIView):
         serializer = ContactListSerializer(contacts, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-    # def post( self , request ) : 
+    def post( self , request ) :
 
-    #     contacts = ContactList.objects.filter(user = request.user)
-    #     serializer = ContactListSerializer(contacts, many=True)
-    #     return Response(serializer.data, status=status.HTTP_200_OK)
+        data = json.loads(request.body)
+        private_key = data.get('privateKey')
+
+        print("private" , data)
+
+        u_profile = UserProfile.objects.get(private_key = private_key)
+        c_user = User.objects.get(username = u_profile.user )
+
+        if ContactList.objects.filter( user = request.user).filter( contacts = c_user) : 
+
+            return Response({ "error" : "This contact is already exist"} , status=status.HTTP_409_CONFLICT)
+
+        contacts = ContactList.objects.create(user = request.user , contacts = c_user)
+
+
+        return Response({"message" : "Contact Successfully Added"}, status=status.HTTP_200_OK)
     
 
    
