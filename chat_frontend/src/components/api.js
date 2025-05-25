@@ -56,7 +56,7 @@ api.interceptors.response.use(
         // No refresh token, redirect to login
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/login'; // or your login page
+        window.location.href = '/'; // or your login page
         return Promise.reject(error);
       }
 

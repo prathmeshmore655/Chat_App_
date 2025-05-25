@@ -1,42 +1,65 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 import json
 
-class ChatConsumer(AsyncWebsocketConsumer):
 
-    async def connect(self):
 
-        self.room_name = self.scope['url']['kwargs']['room_name']
-        self.group_room_name = f"chat{self.room_name}"
+
+class ChatConsumer ( AsyncWebsocketConsumer)  : 
+
+
+
+    async def connect( self ) :
+
+        self.room_name = self.scope['url_route']['kwargs']['room_name']
+        self.room_group_name = f'chat_{self.room_name}'
+
+        await self.channel_layer.group_add(
+            self.room_group_name  ,
+            self.channel_name
+        )
 
         await self.accept()
 
-        await self.send(text_data=json.dumps({
-            'message': 'You are connected!'
-        }))
+    
 
-    async def disconnect(self, close_code):
-        
-        # await self.channel_layer.group_discard(
-            
-        # )
-
-        pass
-
-    async def receive(self, text_data):
+    async def receive( self ,text_data ) : 
 
         data = json.loads(text_data)
-        message = data.get('message', '')
-        sender = data.get('sender' ,'')
-        receiver = data.get('receiver' , '')
-
+        message = data.get('message')
+        user = self.scope["user"]
+        receiver = data.get('receiver')
 
         await self.channel_layer.group_send(
+            self.room_group_name ,
             {
-                "type" : "send_message" ,
-                "message" : message ,
-                "sender" : sender ,
-                "receiver" : receiver 
+                "type": "chat_message",
+                "message": message,
+                "sender": user.username,
+                "receiver": receiver
             }
         )
 
-    # async def send_message ( self , text_data  
+
+    async def chat_message ( self , event ) :
+
+        await self.send( text_data=json.dumps(
+            {
+                "message" : event['message'] ,
+                "sender" : event['sender'] ,
+                "receiver" : event['receiver']
+            }
+        ))
+
+
+
+    async def disconnect ( self , close_code ) :
+        
+        await self.channel_layer.group_discard(
+            self.room_group_name ,
+            self
+        )
+
+        await self.close()
+    
+
+    

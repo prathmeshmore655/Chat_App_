@@ -12,6 +12,11 @@ from .serializers import *
 from django.core.mail import send_mail
 from django.conf import settings
 import random
+import logging
+from django.core.exceptions import ObjectDoesNotExist
+from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 def generate_otp(length=4):
     return ''.join([str(random.randint(0, 9)) for _ in range(length)])
@@ -115,37 +120,55 @@ class ContactListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        try:
+            contacts = ContactList.objects.filter(user=request.user)
+            serializer = ContactListSerializer(contacts, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching contact list for user {request.user.id}: {str(e)}")
+            return Response({"error": "Failed to retrieve contacts."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        contacts = ContactList.objects.filter(user = request.user)
-        serializer = ContactListSerializer(contacts, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        private_key = request.data.get("privateKey")
+
+        if not private_key:
+            return Response({"error": "privateKey is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate UUID format
+        try:
+            private_key_uuid = UUID(private_key)
+        except ValueError:
+            return Response({"error": "Invalid private key format."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Prevent user from adding themselves
+        if private_key_uuid == request.user.userprofile.private_key:
+            return Response({"error": "You can't add yourself as a contact."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user_profile = UserProfile.objects.get(private_key=private_key_uuid)
+        except UserProfile.DoesNotExist:
+            return Response({"error": "No user found with the given private key."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error fetching UserProfile with privateKey: {str(e)}")
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        contact_user = user_profile.user
+
+        if ContactList.objects.filter(user=request.user, contacts=contact_user).exists():
+            return Response({"error": "This contact already exists."}, status=status.HTTP_409_CONFLICT)
+
+        try:
+            ContactList.objects.create(user=request.user, contacts=contact_user)
+            return Response({"message": "Contact successfully added."}, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Failed to create contact for user {request.user.id}: {str(e)}")
+            return Response({"error": "Failed to add contact."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    def post( self , request ) :
-
-        data = json.loads(request.body)
-        private_key = data.get('privateKey')
-
-        print("private" , data)
-
-        u_profile = UserProfile.objects.get(private_key = private_key)
-        c_user = User.objects.get(username = u_profile.user )
-
-        if ContactList.objects.filter( user = request.user).filter( contacts = c_user) : 
-
-            return Response({ "error" : "This contact is already exist"} , status=status.HTTP_409_CONFLICT)
-
-        contacts = ContactList.objects.create(user = request.user , contacts = c_user)
-
-
-        return Response({"message" : "Contact Successfully Added"}, status=status.HTTP_200_OK)
-    
-
-   
 
 
 
 class UserPrivateKeyView(APIView):
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -153,13 +176,25 @@ class UserPrivateKeyView(APIView):
 
         try:
             user_profile = UserProfile.objects.get(user=user)
-            
-        except UserProfile.DoesNotExist:
-
+        except ObjectDoesNotExist:
+            logger.warning(f"UserProfile not found for user: {user.id}")
             return Response(
                 {"message": "User profile not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
+        except Exception as e:
+            logger.error(f"Unexpected error retrieving UserProfile for user {user.id}: {str(e)}")
+            return Response(
+                {"message": "An unexpected error occurred while retrieving the user profile."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        serializer = PrivateKeySerializer(user_profile)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        try:
+            serializer = PrivateKeySerializer(user_profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Serialization error for user {user.id}: {str(e)}")
+            return Response(
+                {"message": "An error occurred while serializing the data."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
