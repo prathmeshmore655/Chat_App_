@@ -1,0 +1,11 @@
+FROM node:18
+
+WORKDIR /app
+
+COPY chat_frontend/ /app/
+
+RUN npm install
+# RUN npm run build
+
+# Serve the build directory using a lightweight server
+CMD ["npm", "start"]
