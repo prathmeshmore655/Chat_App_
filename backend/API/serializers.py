@@ -42,3 +42,13 @@ class PrivateKeySerializer ( ModelSerializer) :
 
         model = UserProfile
         fields = ['private_key']
+
+
+class UserSerializer(ModelSerializer):
+    private_key = PrivateKeySerializer(source='userprofile', read_only=True)
+    profile_photo = ImageField(source='userprofile.profile_photo', read_only=True)
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'private_key', 'profile_photo']
+        read_only_fields = ['id', 'private_key', 'profile_photo']  # Make these fields read-only

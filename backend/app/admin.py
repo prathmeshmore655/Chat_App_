@@ -16,3 +16,4 @@ class userProfileTable( admin.ModelAdmin):
 
 
 admin.site.register(UserProfile , userProfileTable )
+admin.site.register(Message)

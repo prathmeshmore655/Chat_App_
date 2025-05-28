@@ -198,3 +198,28 @@ class UserPrivateKeyView(APIView):
                 {"message": "An error occurred while serializing the data."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+
+
+
+class GetUserView ( APIView) : 
+
+    permission_classes = [IsAuthenticated]
+
+    def get ( self , request ) : 
+
+        user = request.user
+
+        if not user:
+            return Response({"error": "User is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(username=user.username)
+        except User.DoesNotExist:
+            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error fetching user {user.username}: {str(e)}")
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        serializer = UserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
