@@ -223,3 +223,25 @@ class GetUserView ( APIView) :
 
         serializer = UserSerializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+class MessageListView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, contact):
+        if not contact:
+            return Response({"error": "Contact is required."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+
+            print("contact" , contact)
+
+            messages = Message.objects.filter(room_name=contact).order_by('timestamp')
+
+        except User.DoesNotExist:
+            return Response({"error": "Contact not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        
+        serializer = MessageSerializer(messages, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)

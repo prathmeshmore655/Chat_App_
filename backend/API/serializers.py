@@ -1,7 +1,7 @@
 from rest_framework.serializers import ModelSerializer, CharField, ValidationError , ImageField
 from django.contrib.auth.models import User
 
-from app.models import ContactList, UserProfile
+from app.models import *
 
 
 
@@ -52,3 +52,21 @@ class UserSerializer(ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'private_key', 'profile_photo']
         read_only_fields = ['id', 'private_key', 'profile_photo']  # Make these fields read-only
+
+
+
+class MessageSerializer( ModelSerializer) :
+  
+    sender = CharField(source='sender.username', read_only=True)  # Add sender username
+    receiver = CharField(source='receiver.username', read_only=True)  # Add receiver username
+    
+    # receiver = rec.username
+
+    class Meta:
+
+        model = Message
+        fields = ['id', 'room_name', 'message', 'sender', 'receiver', 'timestamp']
+        read_only_fields = ['id', 'timestamp']
+        extra_kwargs = {
+            'room_name': {'write_only': True},  # Hide room_name from output
+        }

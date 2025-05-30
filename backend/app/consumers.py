@@ -65,7 +65,7 @@ class ChatConsumer ( AsyncWebsocketConsumer)  :
         rec_instance = await database_sync_to_async(User.objects.get)(username=event['receiver'])
 
         await database_sync_to_async(Message.objects.create)(
-            room_name=self.room_name,
+            room_name=self.room_group_name,
             message=event['message'],
             sender=user_instance,
             receiver=rec_instance

@@ -80,7 +80,7 @@ export default function ChatApp() {
     } else {
       setMessages([]);
     }
-  }, [selectedContact]);
+  }, [selectedContact, user]); // added user to dependency to avoid missing user
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -94,16 +94,15 @@ export default function ChatApp() {
 
   // Setup and cleanup WebSocket connection per selected contact
   useEffect(() => {
-    if (!selectedContact) return;
+    if (!selectedContact || !user) return;
 
-    // Close previous WS if any
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${protocol}://127.0.0.1:8000/ws/chat/${encodeURIComponent(selectedContact.name)}/`;
+    const wsUrl = `${protocol}://127.0.0.1:8000/ws/chat/${encodeURIComponent(selectedContact.name)}and${encodeURIComponent(user.username)}/`;
     const socket = new WebSocket(wsUrl);
     wsRef.current = socket;
 
@@ -116,8 +115,10 @@ export default function ChatApp() {
       try {
         const data = JSON.parse(event.data);
         if (data.message) {
-          // Append message from other user
-          setMessages((prev) => [...prev, { from: selectedContact.name, text: data.message }]);
+          console.log('Received message:', data.message);
+          if (data.sender !== user?.username) {
+            setMessages((prev) => [...prev, { from: selectedContact.name, text: data.message }]);
+          }
         }
       } catch (err) {
         console.error('Invalid WebSocket message:', event.data);
@@ -133,14 +134,13 @@ export default function ChatApp() {
       setError('WebSocket connection error');
     };
 
-    // Cleanup on unmount or selectedContact change
     return () => {
       if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
         socket.close();
       }
       wsRef.current = null;
     };
-  }, [selectedContact]);
+  }, [selectedContact, user]);
 
   // Fetch contacts from API
   const fetchContacts = async () => {
@@ -160,11 +160,39 @@ export default function ChatApp() {
 
   // Fetch messages for a contact
   const fetchMessages = async (contactName) => {
+    if (!user) return;
+
     setLoadingMessages(true);
     setError('');
     try {
-      const res = await api.get(`/messages/?contact=${encodeURIComponent(contactName)}`);
-      setMessages(res.data);
+      const res = await api.get(`/messages/chat_${encodeURIComponent(contactName)}and${encodeURIComponent(user.username)}`);
+      if (!Array.isArray(res.data)) {
+        throw new Error('Invalid messages format');
+      }
+
+      if (res.data.length === 0) {
+        setMessages([]);
+        return;
+      }
+
+      console.log('Fetched messages:', res.data);
+
+      // Sort messages by timestamp if available
+      if (res.data[0].hasOwnProperty('timestamp')) {
+        res.data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      } else if (res.data[0].hasOwnProperty('index')) {
+        res.data.sort((a, b) => a.index - b.index);
+      }
+
+      // Format messages for UI - Use text, from fields to match rendering
+      const formattedMessages = res.data
+        .filter(msg => msg.message && typeof msg.message === 'string')
+        .map(msg => ({
+          from: msg.sender === user.username ? 'me' : msg.sender,
+          text: msg.message,
+        }));
+
+      setMessages(formattedMessages);
     } catch (err) {
       setError('Failed to load messages');
       console.error(err);
@@ -181,13 +209,12 @@ export default function ChatApp() {
     const trimmedMsg = message.trim();
 
     // Optimistically add message locally as from 'me'
-    setMessages((prev) => [...prev, { from: "me", text: trimmedMsg ,}]);
+    setMessages((prev) => [...prev, { from: "me", text: trimmedMsg }]);
     setMessage('');
 
-    // If WebSocket ready, send through WS
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
-        wsRef.current.send(JSON.stringify({ message: trimmedMsg , sender : user.username , receiver: selectedContact.username }));
+        wsRef.current.send(JSON.stringify({ message: trimmedMsg, sender: user.username, receiver: selectedContact.name }));
       } catch (err) {
         console.error('WS send error:', err);
         setError('Failed to send message over WebSocket');
@@ -195,7 +222,6 @@ export default function ChatApp() {
         setSending(false);
       }
     } else {
-      // Fallback: send via API POST
       try {
         await api.post('/messages/', { to: selectedContact.name, text: trimmedMsg });
       } catch (err) {
@@ -317,86 +343,93 @@ export default function ChatApp() {
   return (
     <>
       <Box sx={{ display: 'flex', height: '100vh', bgcolor: '#121212', overflow: 'hidden' }}>
-        {/* Sidebar */}
         {isMobile ? (
           <Drawer
             anchor="left"
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
-            transitionDuration={350}
-            ModalProps={{ keepMounted: true }}
-            PaperProps={{ sx: { width: '100vw', maxWidth: 360 } }}
+            PaperProps={{ sx: { width: 320, bgcolor: '#0f0f0f', color: '#fff' } }}
           >
             {Sidebar}
           </Drawer>
         ) : (
-          <Slide direction="right" in mountOnEnter unmountOnExit>
-            {Sidebar}
-          </Slide>
+          Sidebar
         )}
 
-        {/* Chat area */}
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <Box
+          sx={{
+            flexGrow: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: '#121212',
+            height: '100vh',
+            overflow: 'hidden',
+          }}
+        >
           <AppBar position="static" sx={{ bgcolor: '#1a1a1a', boxShadow: '0 2px 4px rgba(255,0,0,0.4)' }}>
             <Toolbar>
               {isMobile && (
-                <IconButton edge="start" onClick={() => setSidebarOpen(true)} sx={{ mr: 1, color: '#fff' }}>
+                <IconButton
+                  edge="start"
+                  color="inherit"
+                  onClick={() => setSidebarOpen(true)}
+                  sx={{ mr: 2 }}
+                  aria-label="open drawer"
+                >
                   <MenuIcon />
                 </IconButton>
               )}
-              <Avatar src={selectedContact?.avatar} />
-              <Typography variant="h6" sx={{ ml: 2, color: '#fff' }}>
-                {selectedContact?.name || 'Select a contact'}
+              <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                {selectedContact ? selectedContact.name : 'Select a contact'}
               </Typography>
             </Toolbar>
           </AppBar>
 
-          <Box sx={{ flexGrow: 1, p: 2, overflowY: 'auto', backgroundColor: '#181818' }}>
-            {error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
-              </Alert>
-            )}
-
+          <Box
+            sx={{
+              flexGrow: 1,
+              overflowY: 'auto',
+              px: 2,
+              py: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+            }}
+          >
             {loadingMessages ? (
-              <Box sx={{ p: 2, textAlign: 'center' }}>
-                <CircularProgress size={28} />
+              <Box sx={{ mt: 3, textAlign: 'center' }}>
+                <CircularProgress size={36} />
               </Box>
+            ) : error ? (
+              <Alert severity="error">{error}</Alert>
             ) : messages.length === 0 ? (
-              <Typography variant="body2" sx={{ p: 2, textAlign: 'center', color: '#aaa' }}>
-                No messages yet.
+              <Typography sx={{ mt: 3, textAlign: 'center', color: '#666' }}>
+                No messages yet. Start chatting!
               </Typography>
             ) : (
-              messages.map((msg, idx) => (
-                <Fade in key={idx} timeout={400 + idx * 60}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: msg.from === 'me' ? 'flex-end' : 'flex-start',
-                      mb: 1,
-                    }}
-                  >
-                    <Paper
-                      elevation={2}
-                      sx={{
-                        bgcolor: msg.from === 'me' ? '#ff1744' : '#333',
-                        color: '#fff',
-                        px: 2,
-                        py: 1,
-                        maxWidth: '75%',
-                        borderRadius: 2,
-                      }}
-                    >
-                      <Typography variant="body1">{msg.text}</Typography>
-                    </Paper>
-                  </Box>
-                </Fade>
+              messages.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.05 }}
+                  style={{
+                    alignSelf: msg.from === 'me' ? 'flex-end' : 'flex-start',
+                    maxWidth: '70%',
+                    padding: '8px 12px',
+                    borderRadius: 12,
+                    backgroundColor: msg.from === 'me' ? '#e91e63' : '#444',
+                    color: '#fff',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {msg.text}
+                </motion.div>
               ))
             )}
             <div ref={messagesEndRef} />
           </Box>
 
-          {/* Input box */}
           <Box
             component="form"
             onSubmit={(e) => {
@@ -404,56 +437,49 @@ export default function ChatApp() {
               handleSendMessage();
             }}
             sx={{
-              display: 'flex',
               p: 1,
-              bgcolor: '#0f0f0f',
-              borderTop: '1px solid #2a2a2a',
+              borderTop: '1px solid #333',
+              bgcolor: '#1a1a1a',
+              display: 'flex',
               alignItems: 'center',
+              gap: 1,
             }}
           >
             <TextField
-              placeholder="Type a message..."
+              fullWidth
+              placeholder="Type a message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              fullWidth
-              multiline
-              maxRows={4}
+              disabled={!selectedContact}
               size="small"
-              sx={{
-                bgcolor: '#222',
-                borderRadius: 2,
-                input: { color: '#fff' },
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#444' },
-              }}
-              disabled={!selectedContact || sending}
               InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      color="primary"
-                      onClick={handleSendMessage}
-                      disabled={sending || !message.trim() || !selectedContact}
-                      sx={{ color: '#ff1744' }}
-                    >
-                      <SendIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ),
+                sx: {
+                  bgcolor: '#222',
+                  borderRadius: 2,
+                  input: { color: '#fff' },
+                },
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
               }}
             />
+            <IconButton
+              color="primary"
+              disabled={!message.trim() || sending || !selectedContact}
+              onClick={handleSendMessage}
+              sx={{ bgcolor: '#e91e63', '&:hover': { bgcolor: '#c2185b' }, color: '#fff' }}
+              aria-label="send message"
+            >
+              <SendIcon />
+            </IconButton>
           </Box>
         </Box>
       </Box>
 
-      {/* Add Contact Dialog */}
-      <AddContactDialog
-        open={addDialogOpen}
-        onClose={() => setAddDialogOpen(false)}
-        onAdded={() => {
-          setAddDialogOpen(false);
-          fetchContacts();
-        }}
-      />
+      <AddContactDialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} />
     </>
   );
 }
