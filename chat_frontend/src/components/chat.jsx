@@ -1,39 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
-import api from './api'; // Your configured axios instance or API wrapper
+import api from './api';
 import {
-  AppBar,
-  Avatar,
-  Box,
-  Divider,
-  IconButton,
-  InputAdornment,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  TextField,
-  Toolbar,
-  Typography,
-  Paper,
-  Slide,
-  Drawer,
-  Fade,
-  Grow,
-  Button,
-  useTheme,
-  useMediaQuery,
-  CircularProgress,
-  Alert,
+  AppBar, Avatar, Box, Divider, IconButton, InputAdornment, List, ListItem,
+  ListItemAvatar, ListItemText, TextField, Toolbar, Typography, Paper, Slide,
+  Drawer, Fade, Grow, Button, useTheme, useMediaQuery, CircularProgress, Alert,
 } from '@mui/material';
 import {
-  Menu as MenuIcon,
-  Add as AddIcon,
-  Search as SearchIcon,
-  Send as SendIcon,
-  Close as CloseIcon,
+  Menu as MenuIcon, Add as AddIcon, Search as SearchIcon,
+  Send as SendIcon, Close as CloseIcon,
 } from '@mui/icons-material';
-import AddContactDialog from './AddContactDialog'; // adjust import path
+import AddContactDialog from './AddContactDialog';
 import { motion } from 'framer-motion';
+
+// Avatar fallback
+function getInitials(name) {
+  if (!name) return '';
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
 
 export default function ChatApp() {
   const theme = useTheme();
@@ -54,33 +37,51 @@ export default function ChatApp() {
 
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
+  const reconnectTimeout = useRef(null);
+
+
+
+  function getRoomName ( sender , receiver ) {
+    const sorted = [sender, receiver].sort();
+    return `${encodeURIComponent(sorted[0])}and${encodeURIComponent(sorted[1])}`;
+
+  }
 
   // Fetch logged-in user info once on mount
   useEffect(() => {
-    const fetchUser = async () => {
+    let mounted = true;
+    (async () => {
       try {
         const res = await api.get('/get-user/');
-        setUser(res.data);
-      } catch (err) {
-        console.error('Failed to fetch user:', err);
+        if (mounted) setUser(res.data);
+      } catch {
+        setError('Failed to fetch user');
       }
-    };
-    fetchUser();
+    })();
+    return () => { mounted = false; };
   }, []);
 
-  // Fetch contacts on mount
-  useEffect(() => {
-    fetchContacts();
-  }, []);
+  // Fetch contacts on mount and after adding a contact
+  const fetchContacts = async () => {
+    setLoadingContacts(true);
+    setError('');
+    try {
+      const res = await api.get('/contacts/');
+      setContacts(res.data);
+      setSelectedContact(sel => sel || res.data[0] || null);
+    } catch {
+      setError('Failed to load contacts');
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+  useEffect(() => { fetchContacts(); }, []);
 
   // Refetch messages when selected contact changes
   useEffect(() => {
-    if (selectedContact) {
-      fetchMessages(selectedContact.name);
-    } else {
-      setMessages([]);
-    }
-  }, [selectedContact, user]); // added user to dependency to avoid missing user
+    if (selectedContact && user) fetchMessages(selectedContact.name);
+    else setMessages([]);
+  }, [selectedContact, user]);
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -96,106 +97,88 @@ export default function ChatApp() {
   useEffect(() => {
     if (!selectedContact || !user) return;
 
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+    let socket;
+    let reconnectAttempts = 0;
+    let closedByUser = false;
+
+    function connectWS() {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${protocol}://127.0.0.1:8000/ws/chat/${getRoomName(selectedContact.name, user.username)}/`;
+      socket = new window.WebSocket(wsUrl);
+      wsRef.current = socket;
+
+      console.log('[WebSocket] Connecting to:', wsUrl);
+
+      socket.onopen = () => {
+        reconnectAttempts = 0;
+        setError('');
+        console.log('[WebSocket] Connected');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('[WebSocket] Message received:', data);
+          if (data.message && data.sender !== user.username) {
+            setMessages(prev => [...prev, { from: selectedContact.name, text: data.message }]);
+          }
+        } catch (err) {
+          console.error('[WebSocket] Failed to parse message:', event.data, err);
+        }
+      };
+
+      socket.onclose = (event) => {
+        wsRef.current = null;
+        console.warn('[WebSocket] Closed', event);
+        if (!closedByUser && reconnectAttempts < 5) {
+          reconnectAttempts += 1;
+          console.log(`[WebSocket] Attempting reconnect #${reconnectAttempts} in ${1000 * reconnectAttempts}ms`);
+          reconnectTimeout.current = setTimeout(connectWS, 1000 * reconnectAttempts);
+        }
+      };
+
+      socket.onerror = (err) => {
+        setError('WebSocket connection error');
+        console.error('[WebSocket] Error:', err);
+        socket.close();
+      };
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const wsUrl = `${protocol}://127.0.0.1:8000/ws/chat/${encodeURIComponent(selectedContact.name)}and${encodeURIComponent(user.username)}/`;
-    const socket = new WebSocket(wsUrl);
-    wsRef.current = socket;
-
-    socket.onopen = () => {
-      console.log('WebSocket connected');
-      setError('');
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.message) {
-          console.log('Received message:', data.message);
-          if (data.sender !== user?.username) {
-            setMessages((prev) => [...prev, { from: selectedContact.name, text: data.message }]);
-          }
-        }
-      } catch (err) {
-        console.error('Invalid WebSocket message:', event.data);
-      }
-    };
-
-    socket.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
-
-    socket.onerror = (err) => {
-      console.error('WebSocket error:', err);
-      setError('WebSocket connection error');
-    };
+    connectWS();
 
     return () => {
-      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      closedByUser = true;
+      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
         socket.close();
       }
       wsRef.current = null;
     };
   }, [selectedContact, user]);
 
-  // Fetch contacts from API
-  const fetchContacts = async () => {
-    setLoadingContacts(true);
-    setError('');
-    try {
-      const res = await api.get('/contacts/');
-      setContacts(res.data);
-      setSelectedContact(res.data[0] || null);
-    } catch (err) {
-      setError('Failed to load contacts');
-      console.error(err);
-    } finally {
-      setLoadingContacts(false);
-    }
-  };
+ 
 
   // Fetch messages for a contact
   const fetchMessages = async (contactName) => {
-    if (!user) return;
-
     setLoadingMessages(true);
     setError('');
     try {
-      const res = await api.get(`/messages/chat_${encodeURIComponent(contactName)}and${encodeURIComponent(user.username)}`);
-      if (!Array.isArray(res.data)) {
-        throw new Error('Invalid messages format');
-      }
 
-      if (res.data.length === 0) {
-        setMessages([]);
-        return;
-      }
-
-      console.log('Fetched messages:', res.data);
-
-      // Sort messages by timestamp if available
-      if (res.data[0].hasOwnProperty('timestamp')) {
-        res.data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      } else if (res.data[0].hasOwnProperty('index')) {
-        res.data.sort((a, b) => a.index - b.index);
-      }
-
-      // Format messages for UI - Use text, from fields to match rendering
-      const formattedMessages = res.data
-        .filter(msg => msg.message && typeof msg.message === 'string')
+      const res = await api.get(`messages/${getRoomName(contactName, user.username)}`);
+      if (!Array.isArray(res.data)) throw new Error('Invalid messages format');
+      let arr = res.data;
+      if (arr.length && arr[0].timestamp) arr.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      else if (arr.length && arr[0].index) arr.sort((a, b) => a.index - b.index);
+      const formatted = arr
+        .filter(msg => msg.message)
         .map(msg => ({
           from: msg.sender === user.username ? 'me' : msg.sender,
           text: msg.message,
+          timestamp: msg.timestamp || new Date().toISOString(),
         }));
-
-      setMessages(formattedMessages);
-    } catch (err) {
+      setMessages(formatted);
+    } catch {
       setError('Failed to load messages');
-      console.error(err);
     } finally {
       setLoadingMessages(false);
     }
@@ -204,33 +187,27 @@ export default function ChatApp() {
   // Send message function (via WS or fallback API)
   const handleSendMessage = async () => {
     if (!message.trim() || sending || !selectedContact) return;
-
     setSending(true);
     const trimmedMsg = message.trim();
-
-    // Optimistically add message locally as from 'me'
-    setMessages((prev) => [...prev, { from: "me", text: trimmedMsg }]);
+    setMessages(prev => [...prev, { from: "me", text: trimmedMsg }]);
     setMessage('');
-
+    let sent = false;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
         wsRef.current.send(JSON.stringify({ message: trimmedMsg, sender: user.username, receiver: selectedContact.name }));
-      } catch (err) {
-        console.error('WS send error:', err);
+        sent = true;
+      } catch {
         setError('Failed to send message over WebSocket');
-      } finally {
-        setSending(false);
-      }
-    } else {
-      try {
-        await api.post('/messages/', { to: selectedContact.name, text: trimmedMsg });
-      } catch (err) {
-        setError('Failed to send message');
-        console.error(err);
-      } finally {
-        setSending(false);
       }
     }
+    if (!sent) {
+      try {
+        await api.post('/messages/', { to: selectedContact.name, text: trimmedMsg });
+      } catch {
+        setError('Failed to send message');
+      }
+    }
+    setSending(false);
   };
 
   // Filter contacts by search query
@@ -238,7 +215,15 @@ export default function ChatApp() {
     (c) => typeof c?.name === 'string' && c.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Sidebar component
+  // Error auto-clear
+  useEffect(() => {
+    if (error) {
+      const t = setTimeout(() => setError(''), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [error]);
+
+  // Sidebar component (UI unchanged, but avatar fallback added)
   const Sidebar = (
     <Box
       sx={{
@@ -311,7 +296,11 @@ export default function ChatApp() {
                   }}
                 >
                   <ListItemAvatar>
-                    <Avatar src={`http://127.0.0.1:8000${contact.avatar}`} alt={contact.name[0]} />
+                    {contact.avatar ? (
+                      <Avatar src={`http://127.0.0.1:8000${contact.avatar}`} alt={contact.name[0]} />
+                    ) : (
+                      <Avatar>{getInitials(contact.name)}</Avatar>
+                    )}
                   </ListItemAvatar>
                   <ListItemText
                     primary={contact.name}
@@ -385,50 +374,80 @@ export default function ChatApp() {
             </Toolbar>
           </AppBar>
 
-          <Box
-            sx={{
-              flexGrow: 1,
-              overflowY: 'auto',
-              px: 2,
-              py: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 1,
-            }}
-          >
-            {loadingMessages ? (
-              <Box sx={{ mt: 3, textAlign: 'center' }}>
-                <CircularProgress size={36} />
-              </Box>
-            ) : error ? (
-              <Alert severity="error">{error}</Alert>
-            ) : messages.length === 0 ? (
-              <Typography sx={{ mt: 3, textAlign: 'center', color: '#666' }}>
-                No messages yet. Start chatting!
-              </Typography>
-            ) : (
-              messages.map((msg, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: i * 0.05 }}
-                  style={{
-                    alignSelf: msg.from === 'me' ? 'flex-end' : 'flex-start',
-                    maxWidth: '70%',
+         <Box
+          sx={{
+            flexGrow: 1,
+            overflowY: 'auto',
+            px: 2,
+            py: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+          }}
+        >
+          {loadingMessages ? (
+            <Box sx={{ mt: 3, textAlign: 'center' }}>
+              <CircularProgress size={36} />
+            </Box>
+          ) : error ? (
+            <Alert severity="error">{error}</Alert>
+          ) : messages.length === 0 ? (
+            <Typography sx={{ mt: 3, textAlign: 'center', color: '#666' }}>
+              No messages yet. Start chatting!
+            </Typography>
+          ) : (
+            messages.map((msg, i) => (
+              <Box
+                key={i}
+                component={motion.div}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignSelf: msg.from === 'me' ? 'flex-end' : 'flex-start',
+                  maxWidth: '70%',
+                }}
+              >
+                <Box
+                  sx={{
                     padding: '8px 12px',
-                    borderRadius: 12,
+                    borderRadius: 2,
                     backgroundColor: msg.from === 'me' ? '#e91e63' : '#444',
                     color: '#fff',
                     wordBreak: 'break-word',
                   }}
                 >
                   {msg.text}
-                </motion.div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </Box>
+                </Box>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    mt: 0.5,
+                    color: '#bbb',
+                    fontSize: '0.75rem',
+                    alignSelf: 'flex-end',
+                  }}
+                >
+                    {new Date(msg.timestamp).toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      second: '2-digit',
+                      hour12: true,
+                    })}
+                </Typography>
+              </Box>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </Box>
+
+
 
           <Box
             component="form"
@@ -479,7 +498,13 @@ export default function ChatApp() {
         </Box>
       </Box>
 
-      <AddContactDialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} />
+      <AddContactDialog
+        open={addDialogOpen}
+        onClose={(added) => {
+          setAddDialogOpen(false);
+          if (added) fetchContacts();
+        }}
+      />
     </>
   );
 }

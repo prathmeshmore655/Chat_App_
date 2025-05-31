@@ -232,14 +232,14 @@ class MessageListView(APIView):
     def get(self, request, contact):
         if not contact:
             return Response({"error": "Contact is required."}, status=status.HTTP_400_BAD_REQUEST)
-        try:
+        # try:
 
-            print("contact" , contact)
+        print("contact" , contact)
 
-            messages = Message.objects.filter(room_name=contact).order_by('timestamp')
+        messages = Message.objects.filter(room_name=contact).order_by('timestamp')
 
-        except User.DoesNotExist:
-            return Response({"error": "Contact not found."}, status=status.HTTP_404_NOT_FOUND)
+        # except User.DoesNotExist:
+        #     return Response({"error": "Contact not found."}, status=status.HTTP_404_NOT_FOUND)
 
         
         serializer = MessageSerializer(messages, many=True)
