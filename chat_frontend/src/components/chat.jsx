@@ -3,7 +3,7 @@ import api from './api';
 import {
   AppBar, Avatar, Box, Divider, IconButton, InputAdornment, List, ListItem,
   ListItemAvatar, ListItemText, TextField, Toolbar, Typography, Paper, Slide,
-  Drawer, Fade, Grow, Button, useTheme, useMediaQuery, CircularProgress, Alert,
+  Drawer, Fade, Grow, Button, useTheme, useMediaQuery, CircularProgress, Alert, Stack
 } from '@mui/material';
 import {
   Menu as MenuIcon, Add as AddIcon, Search as SearchIcon,
@@ -11,6 +11,8 @@ import {
 } from '@mui/icons-material';
 import AddContactDialog from './AddContactDialog';
 import { motion } from 'framer-motion';
+import ChatInputBar from './ChatInputBar';
+import { useSnackbar } from 'notistack';
 
 // Avatar fallback
 function getInitials(name) {
@@ -34,10 +36,62 @@ export default function ChatApp() {
   const [error, setError] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [user, setUser] = useState(null);
-
+ const { enqueueSnackbar } = useSnackbar();
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
   const reconnectTimeout = useRef(null);
+
+
+
+
+  const handleFileUpload = async (file) => {
+  if (!selectedContact) return;
+
+  // Basic file validations (customize as needed)
+  const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf', 'video/mp4'];
+  const maxSizeMB = 20;
+  if (!allowedTypes.includes(file.type)) {
+    enqueueSnackbar('Unsupported file type.', { variant: 'warning' });
+    return;
+  }
+  if (file.size > maxSizeMB * 1024 * 1024) {
+    enqueueSnackbar(`File must be under ${maxSizeMB}MB`, { variant: 'warning' });
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  setSending(true); // optional loader state
+  try {
+    const response = await api.post(`/messages/${selectedContact.id}/files/`, formData);
+
+    if (response?.success) {
+      enqueueSnackbar('File sent successfully!', { variant: 'success' });
+
+      // Update chat with file message
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: response.messageId || Date.now(),
+          from: 'me',
+          type: 'file',
+          fileUrl: response.fileUrl, // Your API should return this
+          fileName: file.name,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } else {
+      throw new Error(response?.message || 'Upload failed');
+    }
+  } catch (error) {
+    console.error('File upload failed:', error);
+    enqueueSnackbar('Failed to send file.', { variant: 'error' });
+  } finally {
+    setSending(false);
+  }
+};
+
 
 
 
@@ -315,17 +369,58 @@ export default function ChatApp() {
         )}
       </Box>
 
-      <Box sx={{ p: 2, display: 'flex', justifyContent: 'flex-end' }}>
+      <Box
+        sx={{
+          p: 2,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          bgcolor: '#1e1e1e',
+          borderRadius: 2,
+          boxShadow: 3,
+          width: '100%',
+        }}
+      >
+        {/* Profile Box */}
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Avatar
+            alt={user?.username}
+            src={`http://127.0.0.1:8000${user?.avatar}`}
+            sx={{ width: 40, height: 40 }}
+          />
+          <Typography
+            variant="subtitle1"
+            sx={{
+              color: '#fff',
+              fontWeight: 500,
+              textOverflow: 'ellipsis',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              maxWidth: { xs: '120px', sm: '200px' },
+            }}
+          >
+            { user?.username || 'User' }
+          </Typography>
+        </Stack>
+
+        {/* Add Button */}
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          size="small"
+          size="medium"
           onClick={() => setAddDialogOpen(true)}
-          sx={{ bgcolor: '#ff1744', '&:hover': { bgcolor: '#f01440' } }}
+          sx={{
+            bgcolor: '#ff1744',
+            '&:hover': { bgcolor: '#f01440' },
+            textTransform: 'none',
+            fontWeight: 500,
+          }}
         >
           Add
         </Button>
       </Box>
+
+
     </Box>
   );
 
@@ -355,7 +450,13 @@ export default function ChatApp() {
             overflow: 'hidden',
           }}
         >
-          <AppBar position="static" sx={{ bgcolor: '#1a1a1a', boxShadow: '0 2px 4px rgba(255,0,0,0.4)' }}>
+          <AppBar
+            position="static"
+            sx={{
+              bgcolor: '#1a1a1a',
+              boxShadow: '0 2px 4px rgba(255,0,0,0.4)',
+            }}
+          >
             <Toolbar>
               {isMobile && (
                 <IconButton
@@ -374,62 +475,63 @@ export default function ChatApp() {
             </Toolbar>
           </AppBar>
 
-         <Box
-          sx={{
-            flexGrow: 1,
-            overflowY: 'auto',
-            px: 2,
-            py: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1,
-          }}
-        >
-          {loadingMessages ? (
-            <Box sx={{ mt: 3, textAlign: 'center' }}>
-              <CircularProgress size={36} />
-            </Box>
-          ) : error ? (
-            <Alert severity="error">{error}</Alert>
-          ) : messages.length === 0 ? (
-            <Typography sx={{ mt: 3, textAlign: 'center', color: '#666' }}>
-              No messages yet. Start chatting!
-            </Typography>
-          ) : (
-            messages.map((msg, i) => (
-              <Box
-                key={i}
-                component={motion.div}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: i * 0.05 }}
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignSelf: msg.from === 'me' ? 'flex-end' : 'flex-start',
-                  maxWidth: '70%',
-                }}
-              >
+          {/* Scrollable messages area */}
+          <Box
+            sx={{
+              flexGrow: 1,
+              overflowY: 'auto',
+              px: 2,
+              py: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+            }}
+          >
+            {loadingMessages ? (
+              <Box sx={{ mt: 3, textAlign: 'center' }}>
+                <CircularProgress size={36} />
+              </Box>
+            ) : error ? (
+              <Alert severity="error">{error}</Alert>
+            ) : messages.length === 0 ? (
+              <Typography sx={{ mt: 3, textAlign: 'center', color: '#666' }}>
+                No messages yet. Start chatting!
+              </Typography>
+            ) : (
+              messages.map((msg, i) => (
                 <Box
+                  key={i}
+                  component={motion.div}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.05 }}
                   sx={{
-                    padding: '8px 12px',
-                    borderRadius: 2,
-                    backgroundColor: msg.from === 'me' ? '#e91e63' : '#444',
-                    color: '#fff',
-                    wordBreak: 'break-word',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignSelf: msg.from === 'me' ? 'flex-end' : 'flex-start',
+                    maxWidth: '70%',
                   }}
                 >
-                  {msg.text}
-                </Box>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    mt: 0.5,
-                    color: '#bbb',
-                    fontSize: '0.75rem',
-                    alignSelf: 'flex-end',
-                  }}
-                >
+                  <Box
+                    sx={{
+                      padding: '8px 12px',
+                      borderRadius: 2,
+                      backgroundColor: msg.from === 'me' ? '#e91e63' : '#444',
+                      color: '#fff',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {msg.text}
+                  </Box>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      mt: 0.5,
+                      color: '#bbb',
+                      fontSize: '0.75rem',
+                      alignSelf: 'flex-end',
+                    }}
+                  >
                     {new Date(msg.timestamp).toLocaleString('en-IN', {
                       timeZone: 'Asia/Kolkata',
                       year: 'numeric',
@@ -440,62 +542,25 @@ export default function ChatApp() {
                       second: '2-digit',
                       hour12: true,
                     })}
-                </Typography>
-              </Box>
-            ))
-          )}
-          <div ref={messagesEndRef} />
-        </Box>
-
-
-
-          <Box
-            component="form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            sx={{
-              p: 1,
-              borderTop: '1px solid #333',
-              bgcolor: '#1a1a1a',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-            }}
-          >
-            <TextField
-              fullWidth
-              placeholder="Type a message"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              disabled={!selectedContact}
-              size="small"
-              InputProps={{
-                sx: {
-                  bgcolor: '#222',
-                  borderRadius: 2,
-                  input: { color: '#fff' },
-                },
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-            />
-            <IconButton
-              color="primary"
-              disabled={!message.trim() || sending || !selectedContact}
-              onClick={handleSendMessage}
-              sx={{ bgcolor: '#e91e63', '&:hover': { bgcolor: '#c2185b' }, color: '#fff' }}
-              aria-label="send message"
-            >
-              <SendIcon />
-            </IconButton>
+                  </Typography>
+                </Box>
+              ))
+            )}
+            <div ref={messagesEndRef} />
           </Box>
+
+          {/* Chat input at bottom */}
+          <ChatInputBar
+            message={message}
+            setMessage={setMessage}
+            sending={sending}
+            handleSendMessage={handleSendMessage}
+            selectedContact={selectedContact}
+            user={user}
+            onFileUpload={handleFileUpload}
+          />
         </Box>
+
       </Box>
 
       <AddContactDialog
