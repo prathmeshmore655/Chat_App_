@@ -16,4 +16,5 @@ urlpatterns = [
     path('user/private-key/', UserPrivateKeyView.as_view(), name='user_private_key'),
     path('get-user/', GetUserView.as_view(), name='get_user'),
     path('messages/<str:contact>/', MessageListView.as_view(), name='message_list'),
+    path('upload-file/', FileUploadView.as_view(), name='upload-file'),
 ]

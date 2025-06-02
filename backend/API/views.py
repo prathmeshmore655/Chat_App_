@@ -232,16 +232,55 @@ class MessageListView(APIView):
     def get(self, request, contact):
         if not contact:
             return Response({"error": "Contact is required."}, status=status.HTTP_400_BAD_REQUEST)
-        # try:
-
-        print("contact" , contact)
-
-        messages = Message.objects.filter(room_name=contact).order_by('timestamp')
-
-        # except User.DoesNotExist:
-        #     return Response({"error": "Contact not found."}, status=status.HTTP_404_NOT_FOUND)
-
         
+        try:
+
+            messages = Message.objects.filter(room_name=contact).order_by('timestamp')
+
+        except User.DoesNotExist:
+            return Response({"error": "Contact not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            logger.error(f"Error fetching messages for contact {contact}: {str(e)}")
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         serializer = MessageSerializer(messages, many=True)
 
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+
+
+
+class FileUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, format=None):
+
+        try:
+            sender_username = request.POST.get('sender')
+            receiver_username = request.POST.get('receiver')
+            room_name = request.POST.get('room_name')
+            file = request.FILES.get('file')
+
+            if not all([sender_username, receiver_username, room_name, file]):
+                return Response({"error": "Missing one or more required fields."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                sender = User.objects.get(username=sender_username)
+                receiver = User.objects.get(username=receiver_username)
+            except User.DoesNotExist:
+                return Response({"error": "Sender or receiver not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            uploaded_file = UploadedFile.objects.create(
+                sender=sender,
+                receiver=receiver,
+                room_name=room_name,
+                file=file
+            )
+
+            serializer = UploadedFileSerializer(uploaded_file)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Error uploading file: {str(e)}")
+            return Response({"error": "Failed to upload file."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

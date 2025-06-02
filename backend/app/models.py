@@ -47,3 +47,12 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Message from {self.sender} to {self.receiver} in {self.room_name} at {self.timestamp}"
+    
+
+
+class UploadedFile(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sender_files')
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver_files')
+    room_name = models.CharField(max_length=255)
+    file = models.FileField(upload_to='uploaded_files/')
+    timestamps = models.DateTimeField(auto_now_add=True)

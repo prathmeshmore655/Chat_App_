@@ -60,7 +60,6 @@ class MessageSerializer( ModelSerializer) :
     sender = CharField(source='sender.username', read_only=True)  # Add sender username
     receiver = CharField(source='receiver.username', read_only=True)  # Add receiver username
     
-    # receiver = rec.username
 
     class Meta:
 
@@ -70,3 +69,16 @@ class MessageSerializer( ModelSerializer) :
         extra_kwargs = {
             'room_name': {'write_only': True},  # Hide room_name from output
         }
+
+
+
+
+
+class UploadedFileSerializer(ModelSerializer):
+    sender = CharField(source='sender.username', read_only=True)  # Add sender username
+    receiver = CharField(source='receiver.username', read_only=True)  # Add receiver username
+
+    class Meta:
+
+        model = UploadedFile
+        fields = ['id', 'sender', 'receiver', 'room_name', 'file', 'timestamps']
