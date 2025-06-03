@@ -173,8 +173,32 @@ export default function ChatApp() {
         try {
           const data = JSON.parse(event.data);
           console.log('[WebSocket] Message received:', data);
-          if (data.message && data.sender !== user.username) {
-            setMessages(prev => [...prev, { from: selectedContact.name, text: data.message }]);
+
+          // Handle file messages
+          if (data.file_url) {
+            setMessages(prev => [
+              ...prev,
+              {
+                from: data.sender === user.username ? 'me' : data.sender,
+                type: 'file',
+                fileUrl: data.file_url,
+                fileType: data.file_type,
+                fileName: data.message, // or use a separate field if you have it
+                timestamp: data.timestamp || new Date().toISOString(),
+                text: data.message, // fallback for display
+              }
+            ]);
+          }
+          // Handle text messages
+          else if (data.message && data.sender !== user.username) {
+            setMessages(prev => [
+              ...prev,
+              {
+                from: data.sender === user.username ? 'me' : data.sender,
+                text: data.message,
+                timestamp: data.timestamp || new Date().toISOString(),
+              }
+            ]);
           }
         } catch (err) {
           console.error('[WebSocket] Failed to parse message:', event.data, err);
@@ -199,6 +223,10 @@ export default function ChatApp() {
     }
 
     connectWS();
+
+
+
+    
 
     return () => {
       closedByUser = true;
@@ -521,7 +549,16 @@ export default function ChatApp() {
                       wordBreak: 'break-word',
                     }}
                   >
-                    {msg.text}
+                    {/* Render file message or text */}
+                    {msg.type === 'file' && msg.fileUrl ? (
+                      <img
+                        src={msg.fileUrl}
+                        alt={msg.fileName || 'File'}
+                        style={{ maxWidth: '100%', borderRadius: '4px' }}
+                      />
+                    ) : (
+                      msg.text
+                    )}
                   </Box>
                   <Typography
                     variant="caption"
@@ -557,6 +594,7 @@ export default function ChatApp() {
             handleSendMessage={handleSendMessage}
             selectedContact={selectedContact}
             user={user}
+            socketRef={wsRef} // <-- pass wsRef as socketRef
             onFileUpload={handleFileUpload}
           />
         </Box>

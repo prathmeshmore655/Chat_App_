@@ -31,21 +31,61 @@ class ChatConsumer ( AsyncWebsocketConsumer)  :
 
         print("data" ,data)
 
-        message = data.get('message')
-        user = data.get('sender')
-        receiver = data.get('receiver')
+        if data.get('type') == 'chat_message':
+            
 
-        await self.save_message(message, user, receiver)
+            message = data.get('message')
+            user = data.get('sender')
+            receiver = data.get('receiver')
 
-        await self.channel_layer.group_send(
-            self.room_group_name ,
+            await self.save_message(message, user, receiver)
+
+            await self.channel_layer.group_send(
+                self.room_group_name ,
+                {
+                    "type": "chat_message",
+                    "message": message,
+                    "sender": user,
+                    "receiver": receiver
+                }
+            )
+        elif data.get('type') == 'file_message':
+
+            message = data.get('message')
+            user = data.get('sender')
+            receiver = data.get('receiver')
+            file_type = data.get('file_type')
+            file_url = data.get('file_url')
+            timestamp = data.get('timestamp')
+
+            await self.channel_layer.group_send(
+                self.room_group_name ,
+                {
+                    "type": "file_message",
+                    "message": message,
+                    "sender": user,
+                    "receiver": receiver,
+                    "file_type": file_type,
+                    "file_url": file_url,
+                    "timestamp": timestamp
+                }
+            )
+
+
+    async def file_message ( self , event ) :
+        
+    
+        await self.send( text_data=json.dumps(
             {
-                "type": "chat_message",
-                "message": message,
-                "sender": user,
-                "receiver": receiver
+                "type": "file",
+                "message" : event['message'] ,
+                "sender" : event['sender'] ,
+                "receiver" : event['receiver'],
+                "file_type": event['file_type'],
+                "file_url": event['file_url'],
+                "timestamp": event['timestamp']
             }
-        )
+        ))
 
 
     async def chat_message ( self , event ) :
@@ -59,6 +99,7 @@ class ChatConsumer ( AsyncWebsocketConsumer)  :
 
         await self.send( text_data=json.dumps(
             {
+                "type": "chat",
                 "message" : event['message'] ,
                 "sender" : event['sender'] ,
                 "receiver" : event['receiver']

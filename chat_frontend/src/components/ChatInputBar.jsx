@@ -10,7 +10,8 @@ const ChatInputBar = ({
   handleSendMessage,
   sending,
   selectedContact,
-  user
+  user,
+  socketRef
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -91,23 +92,26 @@ const ChatInputBar = ({
           disabled={!selectedContact}
           onFileUpload={async (file) => {
             try {
-                response = await sendFileMessageAPI(selectedContact.id, file);
+              const response = await sendFileMessageAPI(selectedContact.id, file);
 
-                console.log("File upload response:", response);
+              console.log("File upload response:", response);
 
-                const fileMessage = {
-                  type: "file_message",
-                  message: "📎 File sent", // You can customize or keep empty
-                  file_url: `http://localhost/${response.file}`, // file URL from backend
-                  sender: user.username,
-                  receiver: selectedContact.name,
-                  room_name: getRoomName(user.username, selectedContact.name),
-                  timestamp: new Date().toISOString(),
-                  file_type: file.type,
-                };
-              
+              const fileMessage = {
+                type: "file_message",
+                message: "📎 File sent",
+                file_url: `http://localhost:8000${response.file}`,
+                sender: user.username,
+                receiver: selectedContact.name,
+                room_name: getRoomName(user.username, selectedContact.name),
+                timestamp: new Date().toISOString(),
+                file_type: file.type,
+              };
+
+              if (socketRef && socketRef.current && socketRef.current.readyState === 1) {
                 socketRef.current.send(JSON.stringify(fileMessage));
-                
+              } else {
+                console.error('WebSocket is not connected');
+              }
             } catch (error) {
               console.error('File upload failed:', error);
             }
