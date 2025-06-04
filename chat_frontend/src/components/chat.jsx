@@ -181,7 +181,7 @@ export default function ChatApp() {
               {
                 from: data.sender === user.username ? 'me' : data.sender,
                 type: 'file',
-                fileUrl: data.file_url,
+                file: data.file_url,
                 fileType: data.file_type,
                 fileName: data.message, // or use a separate field if you have it
                 timestamp: data.timestamp || new Date().toISOString(),
@@ -247,17 +247,39 @@ export default function ChatApp() {
     try {
 
       const res = await api.get(`messages/${getRoomName(contactName, user.username)}`);
+
+      console.log('Fetched messages:', res.data);
       if (!Array.isArray(res.data)) throw new Error('Invalid messages format');
       let arr = res.data;
       if (arr.length && arr[0].timestamp) arr.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       else if (arr.length && arr[0].index) arr.sort((a, b) => a.index - b.index);
-      const formatted = arr
-        .filter(msg => msg.message)
-        .map(msg => ({
-          from: msg.sender === user.username ? 'me' : msg.sender,
-          text: msg.message,
-          timestamp: msg.timestamp || new Date().toISOString(),
-        }));
+      const formatted = arr.map(msg => {
+        // Determine sender name (number or string)
+        let senderName = typeof msg.sender === 'string'
+          ? msg.sender
+          : (contacts.find(c => c.id === msg.sender)?.name || msg.sender);
+
+        if (msg.type === 'file' && msg.file) {
+          return {
+            from: senderName === user.username ? 'me' : senderName,
+            type: 'file',
+            file: `http://127.0.0.1:8000${msg.file}`,
+            fileType: msg.file_type || '',
+            fileName: msg.message || 'File',
+            timestamp: msg.timestamps || msg.timestamp || new Date().toISOString(),
+            text: msg.message || '📎 File',
+          };
+        } else {
+          return {
+            from: senderName === user.username ? 'me' : senderName,
+            type: 'text',
+            text: msg.message,
+            timestamp: msg.timestamps || msg.timestamp || new Date().toISOString(),
+          };
+        }
+      });
+      
+        console.log('Formatted messages:', formatted);
       setMessages(formatted);
     } catch {
       setError('Failed to load messages');
@@ -276,7 +298,7 @@ export default function ChatApp() {
     let sent = false;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
-        wsRef.current.send(JSON.stringify({ message: trimmedMsg, sender: user.username, receiver: selectedContact.name }));
+        wsRef.current.send(JSON.stringify({  type: "chat_message", message: trimmedMsg, sender: user.username, receiver: selectedContact.name }));
         sent = true;
       } catch {
         setError('Failed to send message over WebSocket');
@@ -526,6 +548,8 @@ export default function ChatApp() {
                 No messages yet. Start chatting!
               </Typography>
             ) : (
+
+              console.log('Messages:', messages) ||
               messages.map((msg, i) => (
                 <Box
                   key={i}
@@ -550,12 +574,15 @@ export default function ChatApp() {
                     }}
                   >
                     {/* Render file message or text */}
-                    {msg.type === 'file' && msg.fileUrl ? (
-                      <img
-                        src={msg.fileUrl}
-                        alt={msg.fileName || 'File'}
-                        style={{ maxWidth: '100%', borderRadius: '4px' }}
-                      />
+                    {msg.type === 'file' && msg.file ? (
+                      <a
+                        href={msg.file}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#fff', textDecoration: 'underline' }}
+                      >
+                        📎 {msg.fileName || 'File'} ({msg.fileType})
+                      </a>
                     ) : (
                       msg.text
                     )}

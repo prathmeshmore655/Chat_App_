@@ -1,4 +1,5 @@
 # views.py
+from itertools import chain
 from django.utils import timezone
 import json
 from rest_framework import status
@@ -235,7 +236,22 @@ class MessageListView(APIView):
         
         try:
 
-            messages = Message.objects.filter(room_name=contact).order_by('timestamp')
+            text_messages = Message.objects.filter(room_name=contact).order_by('timestamps')
+            file_messages = UploadedFile.objects.filter(room_name=contact).order_by('timestamps')
+
+            text_serialized = TextMessageSerializer(text_messages, many=True).data
+            for msg in text_serialized:
+                msg['type'] = 'text'
+
+            file_serialized = FileMessageSerializer(file_messages, many=True).data
+            for msg in file_serialized:
+                msg['type'] = 'file'
+
+            # Merge and sort by timestamp
+            combined = sorted(
+                chain(text_serialized, file_serialized),
+                key=lambda x: x['timestamps']
+            )
 
         except User.DoesNotExist:
             return Response({"error": "Contact not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -244,9 +260,9 @@ class MessageListView(APIView):
             logger.error(f"Error fetching messages for contact {contact}: {str(e)}")
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        serializer = MessageSerializer(messages, many=True)
+        print(combined)
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(combined, status=status.HTTP_200_OK)
     
 
 
@@ -256,7 +272,7 @@ class FileUploadView(APIView):
 
     def post(self, request, format=None):
 
-        try:
+        # try:
             sender_username = request.POST.get('sender')
             receiver_username = request.POST.get('receiver')
             room_name = request.POST.get('room_name')
@@ -265,11 +281,11 @@ class FileUploadView(APIView):
             if not all([sender_username, receiver_username, room_name, file]):
                 return Response({"error": "Missing one or more required fields."}, status=status.HTTP_400_BAD_REQUEST)
 
-            try:
-                sender = User.objects.get(username=sender_username)
-                receiver = User.objects.get(username=receiver_username)
-            except User.DoesNotExist:
-                return Response({"error": "Sender or receiver not found."}, status=status.HTTP_404_NOT_FOUND)
+            # try:
+            sender = User.objects.get(username=sender_username)
+            receiver = User.objects.get(username=receiver_username)
+            # except User.DoesNotExist:
+            #     return Response({"error": "Sender or receiver not found."}, status=status.HTTP_404_NOT_FOUND)
 
             uploaded_file = UploadedFile.objects.create(
                 sender=sender,
@@ -281,6 +297,6 @@ class FileUploadView(APIView):
             serializer = UploadedFileSerializer(uploaded_file)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        except Exception as e:
-            logger.error(f"Error uploading file: {str(e)}")
-            return Response({"error": "Failed to upload file."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # except Exception as e:
+        #     logger.error(f"Error uploading file: {str(e)}")
+        #     return Response({"error": "Failed to upload file."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

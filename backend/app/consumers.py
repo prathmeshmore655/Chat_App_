@@ -120,6 +120,8 @@ class ChatConsumer ( AsyncWebsocketConsumer)  :
             from .models import Message
             User = get_user_model()
 
+            print(f"Saving message: {message} from {sender} to {receiver} in room {self.room_name}")
+
             try:
                 sender_user = await database_sync_to_async(User.objects.get)(username=sender)
                 receiver_user = await database_sync_to_async(User.objects.get)(username=receiver)

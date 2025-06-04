@@ -22,7 +22,7 @@ const ChatInputBar = ({
   }
 
   const sendFileMessageAPI = async (contactId, file) => {
-    const room_name = getRoomName(user.username, selectedContact.username);
+    const room_name = getRoomName(user.username, selectedContact.name);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -96,13 +96,15 @@ const ChatInputBar = ({
 
               console.log("File upload response:", response);
 
+              console.log("contact", selectedContact);
+
               const fileMessage = {
                 type: "file_message",
                 message: "📎 File sent",
                 file_url: `http://localhost:8000${response.file}`,
                 sender: user.username,
                 receiver: selectedContact.name,
-                room_name: getRoomName(user.username, selectedContact.name),
+                room_name: getRoomName(user.username, selectedContact),
                 timestamp: new Date().toISOString(),
                 file_type: file.type,
               };
