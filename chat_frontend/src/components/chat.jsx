@@ -1,18 +1,27 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import api from './api';
+
 import {
   AppBar, Avatar, Box, Divider, IconButton, InputAdornment, List, ListItem,
-  ListItemAvatar, ListItemText, TextField, Toolbar, Typography, Paper, Slide,
-  Drawer, Fade, Grow, Button, useTheme, useMediaQuery, CircularProgress, Alert, Stack
+  ListItemAvatar, ListItemText, TextField, Toolbar, Typography,
+  Drawer, Grow, Button, useTheme, useMediaQuery, CircularProgress, Alert, Stack
 } from '@mui/material';
 import {
   Menu as MenuIcon, Add as AddIcon, Search as SearchIcon,
-  Send as SendIcon, Close as CloseIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import AddContactDialog from './AddContactDialog';
 import { motion } from 'framer-motion';
 import ChatInputBar from './ChatInputBar';
 import { useSnackbar } from 'notistack';
+import useUser from './useUser';
+import useContacts from './useContacts';
+import useMessages from './useMessages';
+import useChatWebSocket from './useChatWebSocket';
+import useFileUpload from './useFileUpload';
+
+const API_BASE_URL = 'http://127.0.0.1:8000';
+// const WS_BASE_URL_DOMAIN = 'http://127.0.0.1:8000'; // This line was already correctly commented or removed
 
 // Avatar fallback
 function getInitials(name) {
@@ -25,117 +34,76 @@ export default function ChatApp() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
-  const [contacts, setContacts] = useState([]);
+  const { contacts, loadingContacts, contactsError, fetchContacts: refetchContacts } = useContacts();
   const [selectedContact, setSelectedContact] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const { user, userError, loadingUser } = useUser();
+  const { messages, setMessages, loadingMessages, messagesError } = useMessages(selectedContact, user, contacts);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
   const [sending, setSending] = useState(false);
-  const [loadingContacts, setLoadingContacts] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(''); // General component/UI error, specific data errors handled by hooks
   const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [user, setUser] = useState(null);
- const { enqueueSnackbar } = useSnackbar();
+  const { enqueueSnackbar } = useSnackbar();
   const messagesEndRef = useRef(null);
-  const wsRef = useRef(null);
-  const reconnectTimeout = useRef(null);
 
-
-
-
-  const handleFileUpload = async (file) => {
-  if (!selectedContact) return;
-
-  // Basic file validations (customize as needed)
-  const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf', 'video/mp4'];
-  const maxSizeMB = 20;
-  if (!allowedTypes.includes(file.type)) {
-    enqueueSnackbar('Unsupported file type.', { variant: 'warning' });
-    return;
-  }
-  if (file.size > maxSizeMB * 1024 * 1024) {
-    enqueueSnackbar(`File must be under ${maxSizeMB}MB`, { variant: 'warning' });
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('file', file);
-
-  setSending(true); // optional loader state
-  try {
-    const response = await api.post(`/messages/${selectedContact.id}/files/`, formData);
-
-    if (response?.success) {
-      enqueueSnackbar('File sent successfully!', { variant: 'success' });
-
-      // Update chat with file message
-      setMessages((prev) => [
+  const handleIncomingMessage = useCallback((data) => {
+    // console.log('[ChatApp] Incoming WS Message:', data);
+    if (data.file_url) {
+      setMessages(prev => [
         ...prev,
         {
-          id: response.messageId || Date.now(),
-          from: 'me',
+          from: data.sender === user?.username ? 'me' : data.sender,
           type: 'file',
-          fileUrl: response.fileUrl, // Your API should return this
-          fileName: file.name,
-          timestamp: new Date().toISOString(),
-        },
+          file: data.file_url, // Assuming API_BASE_URL is prepended by useMessages or handled by backend
+          fileType: data.file_type,
+          fileName: data.message,
+          timestamp: data.timestamp || new Date().toISOString(),
+          text: data.message,
+        }
       ]);
-    } else {
-      throw new Error(response?.message || 'Upload failed');
+    } else if (data.message && data.sender !== user?.username) {
+      setMessages(prev => [
+        ...prev,
+        {
+          from: data.sender === user?.username ? 'me' : data.sender,
+          text: data.message,
+          timestamp: data.timestamp || new Date().toISOString(),
+        }
+      ]);
     }
-  } catch (error) {
-    console.error('File upload failed:', error);
-    enqueueSnackbar('Failed to send file.', { variant: 'error' });
-  } finally {
-    setSending(false);
-  }
-};
+  }, [setMessages, user]);
+
+  const { wsError, isWsConnected, sendMessageOverWebSocket } = useChatWebSocket(selectedContact, user, handleIncomingMessage);
+  
+  const handleUploadSuccess = useCallback((fileMessage) => {
+    setMessages(prev => [...prev, fileMessage]);
+    // Optionally, trigger WebSocket message if file uploads don't go through WS automatically
+    // For example, by sending a text message indicating a file was uploaded.
+    // This depends on whether your backend's file upload also triggers a WS broadcast.
+  }, [setMessages]);
+
+  const { isUploading, uploadError, handleFileUpload } = useFileUpload({
+    selectedContact,
+    onUploadSuccess: handleUploadSuccess
+  });
+  // const reconnectTimeout = useRef(null); // Removed, handled by useChatWebSocket
 
 
 
 
-  function getRoomName ( sender , receiver ) {
-    const sorted = [sender, receiver].sort();
-    return `${encodeURIComponent(sorted[0])}and${encodeURIComponent(sorted[1])}`;
+  // Old handleFileUpload logic is now in useFileUpload hook.
 
-  }
 
-  // Fetch logged-in user info once on mount
+
+
+  
+
+  // Set initial selected contact when contacts load
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await api.get('/get-user/');
-        if (mounted) setUser(res.data);
-      } catch {
-        setError('Failed to fetch user');
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  // Fetch contacts on mount and after adding a contact
-  const fetchContacts = async () => {
-    setLoadingContacts(true);
-    setError('');
-    try {
-      const res = await api.get('/contacts/');
-      setContacts(res.data);
-      setSelectedContact(sel => sel || res.data[0] || null);
-    } catch {
-      setError('Failed to load contacts');
-    } finally {
-      setLoadingContacts(false);
+    if (!selectedContact && contacts && contacts.length > 0) {
+      setSelectedContact(contacts[0]);
     }
-  };
-  useEffect(() => { fetchContacts(); }, []);
-
-  // Refetch messages when selected contact changes
-  useEffect(() => {
-    if (selectedContact && user) fetchMessages(selectedContact.name);
-    else setMessages([]);
-  }, [selectedContact, user]);
+  }, [contacts, selectedContact]);
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -147,168 +115,52 @@ export default function ChatApp() {
     setSidebarOpen(!isMobile);
   }, [isMobile]);
 
-  // Setup and cleanup WebSocket connection per selected contact
-  useEffect(() => {
-    if (!selectedContact || !user) return;
-
-    let socket;
-    let reconnectAttempts = 0;
-    let closedByUser = false;
-
-    function connectWS() {
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${protocol}://127.0.0.1:8000/ws/chat/${getRoomName(selectedContact.name, user.username)}/`;
-      socket = new window.WebSocket(wsUrl);
-      wsRef.current = socket;
-
-      console.log('[WebSocket] Connecting to:', wsUrl);
-
-      socket.onopen = () => {
-        reconnectAttempts = 0;
-        setError('');
-        console.log('[WebSocket] Connected');
-      };
-
-      socket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('[WebSocket] Message received:', data);
-
-          // Handle file messages
-          if (data.file_url) {
-            setMessages(prev => [
-              ...prev,
-              {
-                from: data.sender === user.username ? 'me' : data.sender,
-                type: 'file',
-                file: data.file_url,
-                fileType: data.file_type,
-                fileName: data.message, // or use a separate field if you have it
-                timestamp: data.timestamp || new Date().toISOString(),
-                text: data.message, // fallback for display
-              }
-            ]);
-          }
-          // Handle text messages
-          else if (data.message && data.sender !== user.username) {
-            setMessages(prev => [
-              ...prev,
-              {
-                from: data.sender === user.username ? 'me' : data.sender,
-                text: data.message,
-                timestamp: data.timestamp || new Date().toISOString(),
-              }
-            ]);
-          }
-        } catch (err) {
-          console.error('[WebSocket] Failed to parse message:', event.data, err);
-        }
-      };
-
-      socket.onclose = (event) => {
-        wsRef.current = null;
-        console.warn('[WebSocket] Closed', event);
-        if (!closedByUser && reconnectAttempts < 5) {
-          reconnectAttempts += 1;
-          console.log(`[WebSocket] Attempting reconnect #${reconnectAttempts} in ${1000 * reconnectAttempts}ms`);
-          reconnectTimeout.current = setTimeout(connectWS, 1000 * reconnectAttempts);
-        }
-      };
-
-      socket.onerror = (err) => {
-        setError('WebSocket connection error');
-        console.error('[WebSocket] Error:', err);
-        socket.close();
-      };
-    }
-
-    connectWS();
-
-
-
-    
-
-    return () => {
-      closedByUser = true;
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
-        socket.close();
-      }
-      wsRef.current = null;
-    };
-  }, [selectedContact, user]);
+  // WebSocket logic is now handled by useChatWebSocket hook.
 
  
 
-  // Fetch messages for a contact
-  const fetchMessages = async (contactName) => {
-    setLoadingMessages(true);
-    setError('');
-    try {
-
-      const res = await api.get(`messages/${getRoomName(contactName, user.username)}`);
-
-      console.log('Fetched messages:', res.data);
-      if (!Array.isArray(res.data)) throw new Error('Invalid messages format');
-      let arr = res.data;
-      if (arr.length && arr[0].timestamp) arr.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      else if (arr.length && arr[0].index) arr.sort((a, b) => a.index - b.index);
-      const formatted = arr.map(msg => {
-        // Determine sender name (number or string)
-        let senderName = typeof msg.sender === 'string'
-          ? msg.sender
-          : (contacts.find(c => c.id === msg.sender)?.name || msg.sender);
-
-        if (msg.type === 'file' && msg.file) {
-          return {
-            from: senderName === user.username ? 'me' : senderName,
-            type: 'file',
-            file: `http://127.0.0.1:8000${msg.file}`,
-            fileType: msg.file_type || '',
-            fileName: msg.message || 'File',
-            timestamp: msg.timestamps || msg.timestamp || new Date().toISOString(),
-            text: msg.message || '📎 File',
-          };
-        } else {
-          return {
-            from: senderName === user.username ? 'me' : senderName,
-            type: 'text',
-            text: msg.message,
-            timestamp: msg.timestamps || msg.timestamp || new Date().toISOString(),
-          };
-        }
-      });
-      
-        console.log('Formatted messages:', formatted);
-      setMessages(formatted);
-    } catch {
-      setError('Failed to load messages');
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
+  // Old fetchMessages function removed as logic is in useMessages hook.
 
   // Send message function (via WS or fallback API)
   const handleSendMessage = async () => {
-    if (!message.trim() || sending || !selectedContact) return;
-    setSending(true);
-    const trimmedMsg = message.trim();
-    setMessages(prev => [...prev, { from: "me", text: trimmedMsg }]);
-    setMessage('');
-    let sent = false;
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({  type: "chat_message", message: trimmedMsg, sender: user.username, receiver: selectedContact.name }));
-        sent = true;
-      } catch {
-        setError('Failed to send message over WebSocket');
-      }
+    if (!message.trim() || (sending || isUploading) || !selectedContact || !user || !user.username) { // Check isUploading
+      enqueueSnackbar('Cannot send message. Ensure you are logged in, a contact is selected, and no operation is in progress.', { variant: 'warning'});
+      return;
     }
-    if (!sent) {
+    setSending(true); // This state is for text messages
+    const trimmedMsg = message.trim();
+    
+    // Optimistic update
+    const optimisticMessage = { 
+      from: "me", 
+      text: trimmedMsg, 
+      timestamp: new Date().toISOString(),
+      id: `temp-${Date.now()}` // Temporary ID for optimistic update
+    };
+    setMessages(prev => [...prev, optimisticMessage]);
+    setMessage('');
+
+    const messagePayload = { 
+      type: "chat_message", 
+      message: trimmedMsg, 
+      sender: user.username, 
+      receiver: selectedContact.name 
+    };
+
+    const sentOverWS = sendMessageOverWebSocket(messagePayload);
+
+    if (!sentOverWS) {
+      // Fallback to API if WebSocket send failed or not connected
       try {
         await api.post('/messages/', { to: selectedContact.name, text: trimmedMsg });
-      } catch {
-        setError('Failed to send message');
+        // If API success, message is already optimistically updated.
+        // enqueueSnackbar('Message sent (fallback API).', { variant: 'info' }); // Optional: notify user of fallback
+      } catch (apiError) {
+        setError('Failed to send message via API');
+        console.error('API send message error:', apiError);
+        // Revert optimistic update
+        setMessages(prev => prev.filter(m => m.id !== optimisticMessage.id)); 
+        enqueueSnackbar('Failed to send message.', { variant: 'error' });
       }
     }
     setSending(false);
@@ -319,13 +171,22 @@ export default function ChatApp() {
     (c) => typeof c?.name === 'string' && c.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Error auto-clear
+  // Error auto-clear for general errors, WebSocket errors, and Upload errors
   useEffect(() => {
-    if (error) {
-      const t = setTimeout(() => setError(''), 4000);
+    const currentError = error || wsError || uploadError;
+    if (currentError) {
+      const t = setTimeout(() => {
+        setError('');
+        // Errors from hooks (wsError, uploadError) are managed by their respective hooks
+        // but can be cleared here if a unified display timeout is desired.
+        // For now, let them manage their own state, ChatApp only clears its 'error'.
+      }, 4000);
       return () => clearTimeout(t);
     }
-  }, [error]);
+  }, [error, wsError, uploadError]);
+
+
+   console.log("messages tototo" ,messages);
 
   // Sidebar component (UI unchanged, but avatar fallback added)
   const Sidebar = (
@@ -401,7 +262,7 @@ export default function ChatApp() {
                 >
                   <ListItemAvatar>
                     {contact.avatar ? (
-                      <Avatar src={`http://127.0.0.1:8000${contact.avatar}`} alt={contact.name[0]} />
+                      <Avatar src={`${API_BASE_URL}${contact.avatar}`} alt={contact.name[0]} />
                     ) : (
                       <Avatar>{getInitials(contact.name)}</Avatar>
                     )}
@@ -409,8 +270,15 @@ export default function ChatApp() {
                   <ListItemText
                     primary={contact.name}
                     secondary={contact.message}
-                    primaryTypographyProps={{ fontWeight: 500, color: '#fff' }}
-                    secondaryTypographyProps={{ color: '#bbb' }}
+                    primaryTypographyProps={{
+                      fontWeight: 500,
+                      color: '#fff',
+                      style: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+                    }}
+                    secondaryTypographyProps={{
+                      color: '#bbb',
+                      style: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+                    }}
                   />
                 </ListItem>
               </Grow>
@@ -435,7 +303,7 @@ export default function ChatApp() {
         <Stack direction="row" spacing={2} alignItems="center">
           <Avatar
             alt={user?.username}
-            src={`http://127.0.0.1:8000${user?.avatar}`}
+            src={`${API_BASE_URL}${user?.avatar}`}
             sx={{ width: 40, height: 40 }}
           />
           <Typography
@@ -541,15 +409,18 @@ export default function ChatApp() {
               <Box sx={{ mt: 3, textAlign: 'center' }}>
                 <CircularProgress size={36} />
               </Box>
-            ) : error ? (
-              <Alert severity="error">{error}</Alert>
+            ) : error || userError || contactsError || messagesError || wsError || uploadError ? (
+              <Alert severity="error">{error || userError || contactsError || messagesError || wsError || uploadError}</Alert>
+            ) : loadingUser ? (
+              <Box sx={{ mt: 3, textAlign: 'center' }}><CircularProgress size={36} /></Box>
             ) : messages.length === 0 ? (
               <Typography sx={{ mt: 3, textAlign: 'center', color: '#666' }}>
                 No messages yet. Start chatting!
               </Typography>
             ) : (
 
-              console.log('Messages:', messages) ||
+             
+
               messages.map((msg, i) => (
                 <Box
                   key={i}
@@ -560,7 +431,7 @@ export default function ChatApp() {
                   sx={{
                     display: 'flex',
                     flexDirection: 'column',
-                    alignSelf: msg.from === 'me' ? 'flex-end' : 'flex-start',
+                    alignSelf: msg.from === "me" ? 'flex-end' : 'flex-start', // Use user.username for clarity
                     maxWidth: '70%',
                   }}
                 >
@@ -568,24 +439,40 @@ export default function ChatApp() {
                     sx={{
                       padding: '8px 12px',
                       borderRadius: 2,
-                      backgroundColor: msg.from === 'me' ? '#e91e63' : '#444',
+                      backgroundColor: msg.from === user?.username ? theme.palette.grey[700] : // User messages: grey
+                                       (selectedContact && msg.from === selectedContact.name ? theme.palette.error.main : '#444'), // Receiver: red, Others: dark grey
                       color: '#fff',
                       wordBreak: 'break-word',
                     }}
                   >
                     {/* Render file message or text */}
-                    {msg.type === 'file' && msg.file ? (
-                      <a
-                        href={msg.file}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#fff', textDecoration: 'underline' }}
-                      >
-                        📎 {msg.fileName || 'File'} ({msg.fileType})
-                      </a>
-                    ) : (
-                      msg.text
-                    )}
+                    {msg.type === 'file' ? (
+  msg.fileType?.startsWith('image/') ? (
+    <img
+      src={msg.file}
+      alt={msg.fileName || 'file preview'}
+      style={{
+        width: '200px',       // Enforce uniform size
+        height: '200px',      // Enforce uniform size
+        objectFit: 'cover',   // Maintain aspect ratio nicely
+        borderRadius: '4px',
+        cursor: 'pointer',
+      }}
+    />
+  ) : (
+    <a
+      href={msg.file}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: '#fff', textDecoration: 'underline' }}
+    >
+      {msg.fileName || 'Download File'}
+    </a>
+  )
+) : (
+  msg.text
+)}
+
                   </Box>
                   <Typography
                     variant="caption"
@@ -621,8 +508,9 @@ export default function ChatApp() {
             handleSendMessage={handleSendMessage}
             selectedContact={selectedContact}
             user={user}
-            socketRef={wsRef} // <-- pass wsRef as socketRef
             onFileUpload={handleFileUpload}
+            sendMessageOverWebSocket={sendMessageOverWebSocket} // <-- pass this
+            isWsConnected={isWsConnected}
           />
         </Box>
 
@@ -632,7 +520,7 @@ export default function ChatApp() {
         open={addDialogOpen}
         onClose={(added) => {
           setAddDialogOpen(false);
-          if (added) fetchContacts();
+          if (added) refetchContacts(); // Ensure this calls the hook's refetchContacts
         }}
       />
     </>

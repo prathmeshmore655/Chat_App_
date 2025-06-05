@@ -260,7 +260,7 @@ class MessageListView(APIView):
             logger.error(f"Error fetching messages for contact {contact}: {str(e)}")
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        print(combined)
+        # print(combined)
 
         return Response(combined, status=status.HTTP_200_OK)
     

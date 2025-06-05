@@ -87,11 +87,16 @@ class UploadedFileSerializer(ModelSerializer):
 
 
 class TextMessageSerializer(ModelSerializer):
+
+    sender = CharField(source='sender.username', read_only=True)  # Add sender username
+    receiver = CharField(source='receiver.username', read_only=True)  # Add receiver username
     class Meta:
         model = Message
         fields = ['id', 'sender', 'receiver', 'message', 'timestamps']
 
 class FileMessageSerializer(ModelSerializer):
+    sender = CharField(source='sender.username', read_only=True)  # Add sender username
+    receiver = CharField(source='receiver.username', read_only=True)  # Add receiver username
     class Meta:
         model = UploadedFile
         fields = ['id', 'sender', 'receiver', 'file', 'timestamps']

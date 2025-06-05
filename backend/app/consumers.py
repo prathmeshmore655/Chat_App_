@@ -29,7 +29,7 @@ class ChatConsumer ( AsyncWebsocketConsumer)  :
 
         data = json.loads(text_data)
 
-        print("data" ,data)
+        print("data hitting" ,data)
 
         if data.get('type') == 'chat_message':
             
