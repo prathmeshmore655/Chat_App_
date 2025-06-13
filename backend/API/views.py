@@ -278,6 +278,8 @@ class FileUploadView(APIView):
             room_name = request.POST.get('room_name')
             file = request.FILES.get('file')
 
+            print(f"Sender: {sender_username}, Receiver: {receiver_username}, Room: {room_name}, File: {file}")
+
             if not all([sender_username, receiver_username, room_name, file]):
                 return Response({"error": "Missing one or more required fields."}, status=status.HTTP_400_BAD_REQUEST)
 
