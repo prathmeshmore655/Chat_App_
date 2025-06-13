@@ -13,6 +13,7 @@ import AddContactDialog from './AddContactDialog';
 import { motion } from 'framer-motion';
 import ChatInputBar from './ChatInputBar';
 import { useSnackbar } from 'notistack';
+import FileUploadDialog from './FileUploadDialog';
 
 // Avatar fallback
 function getInitials(name) {
@@ -36,64 +37,48 @@ export default function ChatApp() {
   const [error, setError] = useState('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [user, setUser] = useState(null);
- const { enqueueSnackbar } = useSnackbar();
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const { enqueueSnackbar } = useSnackbar();
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
   const reconnectTimeout = useRef(null);
 
-
-
-
-  const handleFileUpload = async (file) => {
-  if (!selectedContact) return;
-
-  // Basic file validations (customize as needed)
-  const allowedTypes = ['image/png', 'image/jpeg', 'application/pdf', 'video/mp4'];
-  const maxSizeMB = 20;
-  if (!allowedTypes.includes(file.type)) {
-    enqueueSnackbar('Unsupported file type.', { variant: 'warning' });
-    return;
-  }
-  if (file.size > maxSizeMB * 1024 * 1024) {
-    enqueueSnackbar(`File must be under ${maxSizeMB}MB`, { variant: 'warning' });
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('file', file);
-
-  setSending(true); // optional loader state
-  try {
-    const response = await api.post(`/messages/${selectedContact.id}/files/`, formData);
-
-    if (response?.success) {
-      enqueueSnackbar('File sent successfully!', { variant: 'success' });
-
-      // Update chat with file message
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: response.messageId || Date.now(),
-          from: 'me',
-          type: 'file',
-          fileUrl: response.fileUrl, // Your API should return this
-          fileName: file.name,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    } else {
-      throw new Error(response?.message || 'Upload failed');
+  // Handler for file upload
+  const handleFileUpload = async ({ file, type, message }) => {
+    if (!selectedContact) return;
+    const formData = new FormData();
+    formData.append('receiver', selectedContact.name);
+    if (file){
+    formData.append('file', file);
+    formData.append('type', "file_message");
     }
-  } catch (error) {
-    console.error('File upload failed:', error);
-    enqueueSnackbar('Failed to send file.', { variant: 'error' });
-  } finally {
-    setSending(false);
-  }
-};
+    formData.append('room_name', getRoomName(selectedContact.name, user.username));
+    formData.append('type', "chat_message");
+    formData.append('sender', user.username);
+    if (message) formData.append('message', message);
 
-
-
+    try {
+      const response = await api.post('/upload-file/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (response.data.success) {
+        setMessages(prev => [
+          ...prev,
+          {
+            from: 'me',
+            type: type,
+            file: response.data.fileUrl,
+            fileType: response.data.fileType,
+            fileName: response.data.fileName,
+            text: message || (type === 'audio' ? '🎤 Audio' : '📎 File'),
+            timestamp: new Date().toISOString(),
+          }
+        ]);
+      }
+    } catch (err) {
+      // Show error to user
+    }
+  };
 
   function getRoomName ( sender , receiver ) {
     const sorted = [sender, receiver].sort();
@@ -259,9 +244,12 @@ export default function ChatApp() {
           ? msg.sender
           : (contacts.find(c => c.id === msg.sender)?.name || msg.sender);
 
+        // Compare senderName to user.id to set 'from'
+        const isMe = senderName === user.id;
+
         if (msg.type === 'file' && msg.file) {
           return {
-            from: senderName === user.username ? 'me' : senderName,
+            from: isMe ? 'me' : senderName,
             type: 'file',
             file: `http://127.0.0.1:8000${msg.file}`,
             fileType: msg.file_type || '',
@@ -271,7 +259,7 @@ export default function ChatApp() {
           };
         } else {
           return {
-            from: senderName === user.username ? 'me' : senderName,
+            from: isMe ? 'me' : senderName,
             type: 'text',
             text: msg.message,
             timestamp: msg.timestamps || msg.timestamp || new Date().toISOString(),
@@ -280,6 +268,7 @@ export default function ChatApp() {
       });
       
         console.log('Formatted messages:', formatted);
+        console.log('logged in user', user , "selected contact", selectedContact);
       setMessages(formatted);
     } catch {
       setError('Failed to load messages');
@@ -621,8 +610,16 @@ export default function ChatApp() {
             handleSendMessage={handleSendMessage}
             selectedContact={selectedContact}
             user={user}
-            socketRef={wsRef} // <-- pass wsRef as socketRef
-            onFileUpload={handleFileUpload}
+            socketRef={wsRef}
+            onFileUpload={() => setUploadDialogOpen(true)}
+          />
+          <FileUploadDialog
+            open={uploadDialogOpen}
+            onClose={() => setUploadDialogOpen(false)}
+            onUpload={async (data) => {
+              setUploadDialogOpen(false);
+              await handleFileUpload(data);
+            }}
           />
         </Box>
 

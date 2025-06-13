@@ -1,7 +1,7 @@
 import { Box, TextField, IconButton, useMediaQuery, Tooltip } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import SendIcon from '@mui/icons-material/Send';
-import FileUploadButton from './FileUploadButton';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 import api from './api';
 
 const ChatInputBar = ({
@@ -11,7 +11,8 @@ const ChatInputBar = ({
   sending,
   selectedContact,
   user,
-  socketRef
+  socketRef,
+  onFileUpload // This will open FileUploadDialog
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -20,27 +21,6 @@ const ChatInputBar = ({
     const sorted = [sender, receiver].sort();
     return `${encodeURIComponent(sorted[0])}and${encodeURIComponent(sorted[1])}`;
   }
-
-  const sendFileMessageAPI = async (contactId, file) => {
-    const room_name = getRoomName(user.username, selectedContact.name);
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('sender', user.username);
-    formData.append('receiver', selectedContact.name);
-    formData.append('room_name', room_name);
-
-    console.log("formData:", formData);
-    console.log("contact:", selectedContact.name);
-
-    try {
-      const response = await api.post(`upload-file/`, formData);
-      return response.data;
-    } catch (error) {
-      console.error('File upload API error:', error);
-      return { success: false, message: 'File upload failed' };
-    }
-  };
 
   return (
     <Box
@@ -87,38 +67,22 @@ const ChatInputBar = ({
         }}
       />
 
-      <Tooltip title="Attach file" arrow>
-        <FileUploadButton
-          disabled={!selectedContact}
-          onFileUpload={async (file) => {
-            try {
-              const response = await sendFileMessageAPI(selectedContact.id, file);
-
-              console.log("File upload response:", response);
-
-              console.log("contact", selectedContact);
-
-              const fileMessage = {
-                type: "file_message",
-                message: "📎 File sent",
-                file_url: `http://localhost:8000${response.file}`,
-                sender: user.username,
-                receiver: selectedContact.name,
-                room_name: getRoomName(user.username, selectedContact),
-                timestamp: new Date().toISOString(),
-                file_type: file.type,
-              };
-
-              if (socketRef && socketRef.current && socketRef.current.readyState === 1) {
-                socketRef.current.send(JSON.stringify(fileMessage));
-              } else {
-                console.error('WebSocket is not connected');
-              }
-            } catch (error) {
-              console.error('File upload failed:', error);
-            }
-          }}
-        />
+      <Tooltip title="Attach file or audio" arrow>
+        <span>
+          <IconButton
+            disabled={!selectedContact}
+            onClick={onFileUpload}
+            sx={{
+              bgcolor: '#444',
+              '&:hover': { bgcolor: '#666' },
+              color: '#fff',
+              flexShrink: 0,
+            }}
+            aria-label="attach file"
+          >
+            <AttachFileIcon />
+          </IconButton>
+        </span>
       </Tooltip>
 
       <Tooltip title="Send message" arrow>
