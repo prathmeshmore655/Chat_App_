@@ -89,9 +89,9 @@ class UploadedFileSerializer(ModelSerializer):
 class TextMessageSerializer(ModelSerializer):
     class Meta:
         model = Message
-        fields = ['id', 'sender', 'receiver', 'message', 'timestamps']
+        fields = '__all__'
 
 class FileMessageSerializer(ModelSerializer):
     class Meta:
         model = UploadedFile
-        fields = ['id', 'sender', 'receiver', 'file', 'timestamps']
+        fields = '__all__'

@@ -43,10 +43,10 @@ class Message(models.Model):
     message = models.TextField()
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_messages')
-    timestamps = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Message from {self.sender} to {self.receiver} in {self.room_name} at {self.timestamps}"
+        return f"Message from {self.sender} to {self.receiver} in {self.room_name} at {self.timestamp}"
     
 
 
@@ -55,7 +55,12 @@ class UploadedFile(models.Model):
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='receiver_files')
     room_name = models.CharField(max_length=255)
     file = models.FileField(upload_to='uploaded_files/')
-    timestamps = models.DateTimeField(auto_now_add=True)
+    file_type = models.CharField(max_length=100, blank=True, null=True)  # made optional
+    file_name = models.CharField(max_length=300)
+    size = models.IntegerField( default=0 , null = True , blank=True)
+    message = models.CharField(max_length=600)
+
+    timestamp = models.DateTimeField(auto_now_add=True)  # renamed to singular (best practice)
 
     def __str__(self):
-        return f"File from {self.sender} to {self.receiver} in {self.room_name} at {self.timestamps}"
+        return f"File from {self.sender} to {self.receiver} in {self.room_name} at {self.timestamp}"

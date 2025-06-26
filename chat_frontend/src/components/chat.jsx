@@ -44,41 +44,55 @@ export default function ChatApp() {
   const reconnectTimeout = useRef(null);
 
   // Handler for file upload
-  const handleFileUpload = async ({ file, type, message }) => {
-    if (!selectedContact) return;
-    const formData = new FormData();
-    formData.append('receiver', selectedContact.name);
-    if (file){
-    formData.append('file', file);
-    formData.append('type', "file_message");
-    }
-    formData.append('room_name', getRoomName(selectedContact.name, user.username));
-    formData.append('type', "chat_message");
-    formData.append('sender', user.username);
-    if (message) formData.append('message', message);
+ const handleFileUpload = async ({ file, type, message }) => {
+  console.log("Checking xxxxxxxxxx", file, type, message);
+  if (!selectedContact) return;
 
-    try {
-      const response = await api.post('/upload-file/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      if (response.data.success) {
-        setMessages(prev => [
-          ...prev,
-          {
-            from: 'me',
-            type: type,
-            file: response.data.fileUrl,
-            fileType: response.data.fileType,
-            fileName: response.data.fileName,
-            text: message || (type === 'audio' ? '🎤 Audio' : '📎 File'),
-            timestamp: new Date().toISOString(),
-          }
-        ]);
+  const formData = new FormData();
+  formData.append('receiver', selectedContact.name);
+  formData.append('room_name', getRoomName(selectedContact.name, user.username));
+  formData.append('sender', user.username);
+
+  if (file) {
+    formData.append('file', file);
+    console.log("File MIME type:", file);
+  }
+
+  const formType = file ? "file_message" : "chat_message";
+  formData.append('type', formType);
+  formData.append('file_type' , file.type);
+  formData.append('file_name' , file.name);
+  formData.append('size' , file.size)
+  if (message) formData.append('message', message);
+
+  console.log("Final formData", formData);
+
+  try {
+    const response = await api.post('/upload-file/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+
+      console.log("main responsessee" , response.data.file);
+
+      const new_file_url = `http://localhost:8000${response.data.file}`;
+
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({  type: "file_message", message: message, sender: user.username, receiver: selectedContact.name , file_type : file.type , file_url : new_file_url }));
+        } catch {
+          setError('Failed to send message over WebSocket');
+        }
       }
-    } catch (err) {
-      // Show error to user
-    }
-  };
+
+
+    
+    
+  } catch (err) {
+    console.error("Upload failed", err);
+    // Show error to user
+  }
+};
 
   function getRoomName ( sender , receiver ) {
     const sorted = [sender, receiver].sort();
@@ -161,6 +175,8 @@ export default function ChatApp() {
 
           // Handle file messages
           if (data.file_url) {
+
+            console.log("handling file messages");
             setMessages(prev => [
               ...prev,
               {
@@ -570,7 +586,7 @@ export default function ChatApp() {
                         rel="noopener noreferrer"
                         style={{ color: '#fff', textDecoration: 'underline' }}
                       >
-                        📎 {msg.fileName || 'File'} ({msg.fileType})
+                        📎 {msg.fileName || 'File'} ({msg.type})
                       </a>
                     ) : (
                       msg.text
