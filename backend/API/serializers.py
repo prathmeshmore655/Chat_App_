@@ -81,7 +81,7 @@ class UploadedFileSerializer(ModelSerializer):
     class Meta:
 
         model = UploadedFile
-        fields = ['id', 'sender', 'receiver', 'room_name', 'file', 'timestamps']
+        fields = ['id', 'sender', 'receiver', 'room_name', 'file', 'timestamp']
 
 
 
