@@ -596,43 +596,51 @@ export default function ChatApp() {
                 transition={{ duration: 0.3, delay: i * 0.05 }}
                 sx={commonBoxStyles}
               >
-                <Paper elevation={3} sx={{ ...bubbleStyles, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                  <InsertDriveFileIcon fontSize="medium" sx={{ mt: 0.5 }} />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography
-                      variant="body2"
-                      component="a"
-                      href={msg.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      sx={{
-                        color: isMine ? '#fff' : '#1976d2',
-                        textDecoration: 'underline',
-                        wordBreak: 'break-word',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {msg.fileName || 'Unnamed File'}
-                    </Typography>
-                    {msg.size && (
-                      <Chip
-                        size="small"
-                        label={`${(msg.size / 1024).toFixed(2)} KB`}
-                        sx={{
-                          m: 1,
-                          backgroundColor: isMine ? '#d81b60' : '#e0e0e0',
-                          color: isMine ? '#fff' : '#333',
-                          fontSize: '0.7rem',
-                        }}
-                      />
-                    )}
-                    {msg.text && (
-                      <Typography variant="body2" sx={{ mt: 1 }}>
-                        {msg.text}
-                      </Typography>
-                    )}
-                  </Box>
-                </Paper>
+<Paper elevation={3} sx={{ ...bubbleStyles, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+  <InsertDriveFileIcon fontSize="medium" sx={{ mt: 0.5 }} />
+  <Box sx={{ flex: 1 }}>
+    {msg.fileType.startsWith('audio/') ? (
+      <>
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>{msg.fileName || 'Unnamed File'}</Typography>
+        <audio controls src={msg.file} style={{ width: '100%' }} />
+      </>
+    ) : msg.fileType === 'video/mp4' || msg.fileType === 'video/webm' ? (
+      <>
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>{msg.fileName || 'Unnamed File'}</Typography>
+        <video controls src={msg.file} style={{ width: '100%' }} />
+      </>
+    ) : (
+      <Typography
+        variant="body2"
+        component="a"
+        href={msg.file}
+        target="_blank"
+        rel="noopener noreferrer"
+        sx={{ color: isMine ? '#fff' : '#1976d2', textDecoration: 'underline', wordBreak: 'break-word', fontWeight: 500 }}
+      >
+        {msg.fileName || 'Unnamed File'}
+      </Typography>
+    )}
+    {msg.size && (
+<Chip
+  size="small"
+  label={
+    msg.size >= 1024 * 1024
+      ? `${(msg.size / (1024 * 1024)).toFixed(2)} MB`
+      : `${(msg.size / 1024).toFixed(2)} KB`
+  }
+  sx={{
+    m: 1,
+    backgroundColor: isMine ? '#d81b60' : '#e0e0e0',
+    color: isMine ? '#fff' : '#333',
+    fontSize: '0.7rem',
+  }}
+/>    )}
+    {msg.text && (
+      <Typography variant="body2" sx={{ mt: 1 }}>{msg.text}</Typography>
+    )}
+  </Box>
+</Paper>
                 <Typography
                   variant="caption"
                   sx={{
