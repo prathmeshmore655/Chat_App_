@@ -79,10 +79,13 @@ export default function ChatApp() {
 
       const new_file_url = `http://localhost:8000${response.data.file}`;
 
+      console.log("newwwww" , new_file_url);
+
 
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         try {
-          wsRef.current.send(JSON.stringify({  type: "file_message", message: message, sender: user.username, receiver: selectedContact.name , file_type : file.type , file_url : new_file_url }));
+          console.log("JSON STRINIFY SENDING" , file.name);
+          wsRef.current.send(JSON.stringify({  type: "file_message", message: message, sender: user.username, receiver: selectedContact.name , file_type : file.type , file_url : new_file_url , file_name : file.name , size : file.size }));
         } catch {
           setError('Failed to send message over WebSocket');
         }
@@ -177,7 +180,7 @@ export default function ChatApp() {
           console.log('[WebSocket] Message received:', data);
 
           // Handle file messages
-          if (data.file) {
+          if (data.type == "file") {
 
             console.log("handling file messages",data);
             setMessages(prev => [
@@ -191,6 +194,7 @@ export default function ChatApp() {
                 timestamp: data.timestamp || new Date().toISOString(),
                 text: data.message, // fallback for display
                 size: data.size
+
               }
             ]);
           }
@@ -582,7 +586,7 @@ export default function ChatApp() {
           };
 
           // File Message
-          if (msg.file) {
+          if (msg.type = "file") {
             return (
               <Box
                 key={i}
@@ -598,7 +602,7 @@ export default function ChatApp() {
                     <Typography
                       variant="body2"
                       component="a"
-                      href={msg.file}
+                      href={msg.file_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       sx={{
@@ -654,7 +658,7 @@ export default function ChatApp() {
           }
 
           // Text Message
-          if (!msg.file && msg.text) {
+          if (!msg.file ) {
             return (
               <Box
                 key={i}

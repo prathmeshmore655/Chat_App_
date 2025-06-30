@@ -56,6 +56,9 @@ class ChatConsumer ( AsyncWebsocketConsumer)  :
             file_type = data.get('file_type')
             file_url = data.get('file_url')
             timestamp = data.get('timestamp')
+            file_name = data.get('file_name')
+            size = data.get('size')
+
 
             await self.channel_layer.group_send(
                 self.room_group_name ,
@@ -66,7 +69,9 @@ class ChatConsumer ( AsyncWebsocketConsumer)  :
                     "receiver": receiver,
                     "file_type": file_type,
                     "file_url": file_url,
-                    "timestamp": timestamp
+                    "timestamp": timestamp,
+                    "file_name" : file_name,
+                    "size" : size
                 }
             )
 
@@ -82,7 +87,9 @@ class ChatConsumer ( AsyncWebsocketConsumer)  :
                 "receiver" : event['receiver'],
                 "file_type": event['file_type'],
                 "file_url": event['file_url'],
-                "timestamp": event['timestamp']
+                "timestamp": event['timestamp'],
+                "file_name" : event['file_name'],
+                "size" : event['size']
             }
         ))
 
