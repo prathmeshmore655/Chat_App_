@@ -14,6 +14,9 @@ import { motion } from 'framer-motion';
 import ChatInputBar from './ChatInputBar';
 import { useSnackbar } from 'notistack';
 import FileUploadDialog from './FileUploadDialog';
+import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
+import { Chip } from '@mui/material';
+
 
 // Avatar fallback
 function getInitials(name) {
@@ -174,9 +177,9 @@ export default function ChatApp() {
           console.log('[WebSocket] Message received:', data);
 
           // Handle file messages
-          if (data.file_url) {
+          if (data.file) {
 
-            console.log("handling file messages");
+            console.log("handling file messages",data);
             setMessages(prev => [
               ...prev,
               {
@@ -184,9 +187,10 @@ export default function ChatApp() {
                 type: 'file',
                 file: data.file_url,
                 fileType: data.file_type,
-                fileName: data.message, // or use a separate field if you have it
+                fileName: data.file_name, // or use a separate field if you have it
                 timestamp: data.timestamp || new Date().toISOString(),
                 text: data.message, // fallback for display
+                size: data.size
               }
             ]);
           }
@@ -263,15 +267,16 @@ export default function ChatApp() {
         // Compare senderName to user.id to set 'from'
         const isMe = senderName === user.id;
 
-        if (msg.type === 'file' && msg.file) {
+        if (msg.file) {
           return {
             from: isMe ? 'me' : senderName,
             type: 'file',
             file: `http://127.0.0.1:8000${msg.file}`,
             fileType: msg.file_type || '',
-            fileName: msg.message || 'File',
+            fileName: msg.file_name || 'File',
             timestamp: msg.timestamps || msg.timestamp || new Date().toISOString(),
-            text: msg.message || '📎 File',
+            text: msg.message ,
+            size : msg.size
           };
         } else {
           return {
@@ -552,71 +557,146 @@ export default function ChatApp() {
               <Typography sx={{ mt: 3, textAlign: 'center', color: '#666' }}>
                 No messages yet. Start chatting!
               </Typography>
-            ) : (
+    ) : (
+      <>
+        {messages.map((msg, i) => {
+          const isMine = msg.from === 'me';
+          const alignment = isMine ? 'flex-end' : 'flex-start';
+          const bubbleColor = isMine ? theme.palette.primary.main : '#f5f5f5';
+          const textColor = isMine ? '#fff' : '#333';
 
-              console.log('Messages:', messages) ||
-              messages.map((msg, i) => (
-                <Box
-                  key={i}
-                  component={motion.div}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: i * 0.05 }}
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignSelf: msg.from === 'me' ? 'flex-end' : 'flex-start',
-                    maxWidth: '70%',
-                  }}
-                >
-                  <Box
-                    sx={{
-                      padding: '8px 12px',
-                      borderRadius: 2,
-                      backgroundColor: msg.from === 'me' ? '#e91e63' : '#444',
-                      color: '#fff',
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {/* Render file message or text */}
-                    {msg.type === 'file' && msg.file ? (
-                      <a
-                        href={msg.file}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: '#fff', textDecoration: 'underline' }}
-                      >
-                        📎 {msg.fileName || 'File'} ({msg.type})
-                      </a>
-                    ) : (
-                      msg.text
+          const commonBoxStyles = {
+            display: 'flex',
+            flexDirection: 'column',
+            alignSelf: alignment,
+            maxWidth: isMobile ? '90%' : '60%',
+          };
+
+          const bubbleStyles = {
+            padding: '10px 14px',
+            borderRadius: '12px',
+            backgroundColor: bubbleColor,
+            color: textColor,
+            wordBreak: 'break-word',
+            boxShadow: theme.shadows[2],
+          };
+
+          // File Message
+          if (msg.file) {
+            return (
+              <Box
+                key={i}
+                component={motion.div}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                sx={commonBoxStyles}
+              >
+                <Paper elevation={3} sx={{ ...bubbleStyles, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                  <InsertDriveFileIcon fontSize="medium" sx={{ mt: 0.5 }} />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography
+                      variant="body2"
+                      component="a"
+                      href={msg.file}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{
+                        color: isMine ? '#fff' : '#1976d2',
+                        textDecoration: 'underline',
+                        wordBreak: 'break-word',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {msg.fileName || 'Unnamed File'}
+                    </Typography>
+                    {msg.size && (
+                      <Chip
+                        size="small"
+                        label={`${(msg.size / 1024).toFixed(2)} KB`}
+                        sx={{
+                          m: 1,
+                          backgroundColor: isMine ? '#d81b60' : '#e0e0e0',
+                          color: isMine ? '#fff' : '#333',
+                          fontSize: '0.7rem',
+                        }}
+                      />
+                    )}
+                    {msg.text && (
+                      <Typography variant="body2" sx={{ mt: 1 }}>
+                        {msg.text}
+                      </Typography>
                     )}
                   </Box>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      mt: 0.5,
-                      color: '#bbb',
-                      fontSize: '0.75rem',
-                      alignSelf: 'flex-end',
-                    }}
-                  >
-                    {new Date(msg.timestamp).toLocaleString('en-IN', {
-                      timeZone: 'Asia/Kolkata',
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                      second: '2-digit',
-                      hour12: true,
-                    })}
-                  </Typography>
-                </Box>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </Box>
+                </Paper>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    mt: 0.5,
+                    color: '#888',
+                    fontSize: '0.7rem',
+                    alignSelf: 'flex-end',
+                  }}
+                >
+                  {new Date(msg.timestamp).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true,
+                  })}
+                </Typography>
+              </Box>
+            );
+          }
+
+          // Text Message
+          if (!msg.file && msg.text) {
+            return (
+              <Box
+                key={i}
+                component={motion.div}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                sx={commonBoxStyles}
+              >
+                <Paper elevation={3} sx={bubbleStyles}>
+                  {msg.text}
+                </Paper>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    mt: 0.5,
+                    color: '#888',
+                    fontSize: '0.7rem',
+                    alignSelf: 'flex-end',
+                  }}
+                >
+                  {new Date(msg.timestamp).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true,
+                  })}
+                </Typography>
+              </Box>
+            );
+          }
+
+          return null;
+        })}
+        <div ref={messagesEndRef} />
+      </>
+    )}
+  </Box>
 
           {/* Chat input at bottom */}
           <ChatInputBar

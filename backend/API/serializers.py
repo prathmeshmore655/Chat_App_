@@ -81,7 +81,10 @@ class UploadedFileSerializer(ModelSerializer):
     class Meta:
 
         model = UploadedFile
-        fields = ['id', 'sender', 'receiver', 'room_name', 'file', 'timestamp']
+        fields = '__all__'
+        extra_kwargs = {
+            'room_name': {'write_only': True},  # Hide room_name from output
+        }
 
 
 

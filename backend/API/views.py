@@ -277,6 +277,14 @@ class FileUploadView(APIView):
             receiver_username = request.POST.get('receiver')
             room_name = request.POST.get('room_name')
             file = request.FILES.get('file')
+            file_type = request.POST.get('file_type')
+            file_name = request.POST.get('file_name')
+            message = request.POST.get('message')
+            size = request.POST.get('size')
+
+            if message == 'optional message' : 
+                message = ''
+
 
             print(f"Sender: {sender_username}, Receiver: {receiver_username}, Room: {room_name}, File: {file}")
 
@@ -293,7 +301,11 @@ class FileUploadView(APIView):
                 sender=sender,
                 receiver=receiver,
                 room_name=room_name,
-                file=file
+                file=file, 
+                file_type=file_type,
+                file_name=file_name,
+                message= message,
+                size= int(size)/1000   #size in kb
             )
 
             serializer = UploadedFileSerializer(uploaded_file)

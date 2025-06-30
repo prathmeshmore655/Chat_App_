@@ -58,7 +58,7 @@ class UploadedFile(models.Model):
     file_type = models.CharField(max_length=100, blank=True, null=True)  # made optional
     file_name = models.CharField(max_length=300)
     size = models.IntegerField( default=0 , null = True , blank=True)
-    message = models.CharField(max_length=600)
+    message = models.CharField(max_length=600 , null=True , blank=True)
 
     timestamp = models.DateTimeField(auto_now_add=True)  # renamed to singular (best practice)
 
