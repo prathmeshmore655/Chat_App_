@@ -17,16 +17,16 @@ services:
 
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.chat_frontend
-    volumes:
-      - ./chat_frontend:/app
+      context: ./chat_frontend
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    depends_on:
+      - backend  # only if frontend talks to backend
     restart: unless-stopped
 
   redis:
-    image: redis:7
+    image: redis:7-alpine
     ports:
       - "6379:6379"
     restart: unless-stopped
