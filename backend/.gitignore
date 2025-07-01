@@ -18,8 +18,6 @@ dist/
 build/
 *.manifest
 *.spec
-.env
-.env.*
 # *.sqlite3
 # db.sqlite3
 media/
@@ -30,8 +28,6 @@ staticfiles/
 
 # Virtual Environment
 venv/
-ENV/
-env/
 .venv/
 
 # Django Migrations
@@ -52,10 +48,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .cache/
-.env.local
-.env.development
-.env.test
-.env.production
+
 
 # Optional: Ignore MacOS Finder and Linux trash
 .Spotlight-V100
