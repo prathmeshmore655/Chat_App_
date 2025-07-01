@@ -18,11 +18,11 @@ services:
   frontend:
     build:
       context: ./chat_frontend
-      dockerfile: Dockerfile
+      dockerfile: ../Dockerfile.chat_frontend  # relative to context
     ports:
       - "3000:3000"
     depends_on:
-      - backend  # only if frontend talks to backend
+      - backend
     restart: unless-stopped
 
   redis:
