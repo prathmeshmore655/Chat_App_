@@ -1,0 +1,31 @@
+# General
+*.pyc
+*.pyo
+__pycache__/
+*.db
+*.sqlite3
+*.log
+*.env
+.env
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+*.egg-info/
+build/
+dist/
+
+# Git
+.git
+.gitignore
+
+# Backend
+backend/venv/
+backend/media/
+backend/.env
+
+# Frontend
+chat_frontend/node_modules/
+chat_frontend/build/
+chat_frontend/.env
