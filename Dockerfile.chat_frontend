@@ -1,27 +1,23 @@
-# Stage 1: Build React App
-FROM node:20-alpine AS build
+# --- Stage 1: Build stage ---
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install dependencies and build the app
-COPY chat_frontend/package*.json ./
-RUN npm install
-COPY chat_frontend/ ./
-RUN npm run build
+COPY . .
 
-# Stage 2: Serve the built app with 'serve'
-FROM node:20-alpine AS production
+RUN npm install --omit=dev && npm run build
+
+# --- Stage 2: Static file server ---
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Install serve only (very small)
+# Install 'serve' (tiny static server)
 RUN npm install -g serve
 
-# Copy built app from previous stage
-COPY --from=build /app/build ./build
+# Copy static build from builder
+COPY --from=builder /app/build ./build
 
-# Expose port
 EXPOSE 3000
 
-# Serve the app
 CMD ["serve", "-s", "build", "-l", "3000"]
