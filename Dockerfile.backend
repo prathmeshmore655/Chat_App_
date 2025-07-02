@@ -11,8 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY backend/requirements.txt .
 
+# Install main + WebSocket support
 RUN pip install --upgrade pip && \
-    pip install --prefix=/install --no-cache-dir -r requirements.txt
+    pip install --prefix=/install --no-cache-dir -r requirements.txt && \
+    pip install --prefix=/install --no-cache-dir "uvicorn[standard]"
 
 
 # Stage 2: Final lightweight image
