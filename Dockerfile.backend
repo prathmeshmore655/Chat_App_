@@ -11,13 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY backend/requirements.txt .
 
-# Install main + WebSocket support
+# Install dependencies including uvicorn and whitenoise
 RUN pip install --upgrade pip && \
     pip install --prefix=/install --no-cache-dir -r requirements.txt && \
-    pip install --prefix=/install --no-cache-dir "uvicorn[standard]"
+    pip install --prefix=/install --no-cache-dir "uvicorn[standard]" whitenoise
 
 
-# Stage 2: Final lightweight image
+# Stage 2: Final Image
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -25,8 +25,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# System deps for runtime if needed
+RUN apt-get update && apt-get install -y libpq-dev && apt-get clean
+
 COPY --from=builder /install /usr/local
 COPY backend/ .
+
+# Collect static files
+RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
 

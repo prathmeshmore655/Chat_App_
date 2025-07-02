@@ -34,3 +34,4 @@ typing_extensions
 uvicorn
 zope.interface
 channels-redis
+whitenoise

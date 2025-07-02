@@ -200,10 +200,14 @@ export default function ChatApp() {
           }
           // Handle text messages
           else if (data.message && data.sender !== user.username) {
+
+            console.log("Handling text messages");
+
             setMessages(prev => [
               ...prev,
               {
                 from: data.sender === user.username ? 'me' : data.sender,
+                type : 'text',
                 text: data.message,
                 timestamp: data.timestamp || new Date().toISOString(),
               }
@@ -586,7 +590,7 @@ export default function ChatApp() {
           };
 
           // File Message
-          if (msg.type = "file") {
+          if (!msg.fileName == '') {
             return (
               <Box
                 key={i}
@@ -599,9 +603,9 @@ export default function ChatApp() {
 <Paper elevation={3} sx={{ ...bubbleStyles, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
   <InsertDriveFileIcon fontSize="medium" sx={{ mt: 0.5 }} />
   <Box sx={{ flex: 1 }}>
-    {msg.fileType.startsWith('audio/') ? (
+    {msg.fileType?.startsWith('audio/') ? (
       <>
-        <Typography variant="body2" sx={{ fontWeight: 500 }}>{msg.fileName || 'Unnamed File'}</Typography>
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>{msg.fileName }</Typography>
         <audio controls src={msg.file} style={{ width: '100%' }} />
       </>
     ) : msg.fileType === 'video/mp4' || msg.fileType === 'video/webm' ? (
