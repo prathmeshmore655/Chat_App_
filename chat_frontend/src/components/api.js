@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const BACKEND_BASE_URL = process.env.REACT_APP_BACKEND_BASE_URL;
+
 const api = axios.create({
-  baseURL: 'http://localhost:8000/API',
+  baseURL: `${BACKEND_BASE_URL}/API`,
 });
 
 let isRefreshing = false;
@@ -61,7 +63,7 @@ api.interceptors.response.use(
       }
 
       try {
-        const response = await axios.post('http://localhost:8000/API/token/refresh/', {
+        const response = await axios.post(`${BACKEND_BASE_URL}/API/token/refresh/`, {
           refresh: refreshToken,
         });
 

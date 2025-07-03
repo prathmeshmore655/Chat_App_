@@ -14,6 +14,10 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
+const BACKEND_BASE_URL = process.env.REACT_APP_BACKEND_BASE_URL;
+const BACKEND_HOST = process.env.REACT_APP_BACKEND_HOST
+
+
 const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -26,7 +30,7 @@ const Login = () => {
     setError("");
 
     try {
-      const response = await axios.post("http://127.0.0.1:8000/API/token/", {
+      const response = await axios.post(`${BACKEND_BASE_URL}/API/token/`, {
         username,
         password,
       });

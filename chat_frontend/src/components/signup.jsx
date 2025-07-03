@@ -13,6 +13,10 @@ import { useNavigate } from "react-router-dom";
 import { CircularProgress } from "@mui/material";
 
 
+const BACKEND_BASE_URL = process.env.REACT_APP_BACKEND_BASE_URL;
+const BACKEND_HOST = process.env.REACT_APP_BACKEND_HOST
+
+
 const SignUp = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -46,7 +50,7 @@ const SignUp = () => {
   }
 
   try {
-    await axios.post("http://127.0.0.1:8000/API/signup/send-otp/", {
+    await axios.post(`${BACKEND_BASE_URL}/API/signup/send-otp/`, {
       first_name: form.firstName,
       last_name: form.lastName,
       username: form.username,
@@ -74,7 +78,7 @@ const verifyOtp = async (e) => {
   setLoading(true);
 
   try {
-    await axios.post("http://127.0.0.1:8000/API/signup/verify-otp/", {
+    await axios.post(`${BACKEND_BASE_URL}/API/signup/verify-otp/`, {
       first_name: form.firstName,
       last_name: form.lastName,
       username: form.username,

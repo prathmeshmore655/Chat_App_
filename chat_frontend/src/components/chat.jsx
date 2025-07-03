@@ -18,6 +18,13 @@ import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import { Chip } from '@mui/material';
 
 
+const BACKEND_BASE_URL = process.env.REACT_APP_BACKEND_BASE_URL;
+const BACKEND_HOST = process.env.REACT_APP_BACKEND_HOST
+
+
+console.log("checking !!!!!!!" , BACKEND_BASE_URL , BACKEND_HOST)
+
+
 // Avatar fallback
 function getInitials(name) {
   if (!name) return '';
@@ -77,7 +84,9 @@ export default function ChatApp() {
 
       console.log("main responsessee" , response.data.file);
 
-      const new_file_url = `http://localhost:8000${response.data.file}`;
+      const new_file_url = `${BACKEND_BASE_URL}${response.data.file}`;
+
+
 
       console.log("newwwww" , new_file_url);
 
@@ -162,7 +171,7 @@ export default function ChatApp() {
 
     function connectWS() {
       const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${protocol}://127.0.0.1:8000/ws/chat/${getRoomName(selectedContact.name, user.username)}/`;
+      const wsUrl = `${protocol}://${BACKEND_HOST}/ws/chat/${getRoomName(selectedContact.name, user.username)}/`;
       socket = new window.WebSocket(wsUrl);
       wsRef.current = socket;
 
@@ -180,7 +189,7 @@ export default function ChatApp() {
           console.log('[WebSocket] Message received:', data);
 
           // Handle file messages
-          if (data.type == "file") {
+          if (data.type === "file") {
 
             console.log("handling file messages",data);
             setMessages(prev => [
@@ -279,7 +288,7 @@ export default function ChatApp() {
           return {
             from: isMe ? 'me' : senderName,
             type: 'file',
-            file: `http://127.0.0.1:8000${msg.file}`,
+            file: `${BACKEND_BASE_URL}${msg.file}`,
             fileType: msg.file_type || '',
             fileName: msg.file_name || 'File',
             timestamp: msg.timestamps || msg.timestamp || new Date().toISOString(),
@@ -419,7 +428,7 @@ export default function ChatApp() {
                 >
                   <ListItemAvatar>
                     {contact.avatar ? (
-                      <Avatar src={`http://127.0.0.1:8000${contact.avatar}`} alt={contact.name[0]} />
+                      <Avatar src={`${BACKEND_BASE_URL}/${contact.avatar}`} alt={contact.name[0]} />
                     ) : (
                       <Avatar>{getInitials(contact.name)}</Avatar>
                     )}
@@ -453,7 +462,7 @@ export default function ChatApp() {
         <Stack direction="row" spacing={2} alignItems="center">
           <Avatar
             alt={user?.username}
-            src={`http://127.0.0.1:8000${user?.avatar}`}
+            src={`${BACKEND_BASE_URL}/${user?.avatar}`}
             sx={{ width: 40, height: 40 }}
           />
           <Typography
@@ -608,7 +617,7 @@ export default function ChatApp() {
         <Typography variant="body2" sx={{ fontWeight: 500 }}>{msg.fileName }</Typography>
         <audio controls src={msg.file} style={{ width: '100%' }} />
       </>
-    ) : msg.fileType === 'video/mp4' || msg.fileType === 'video/webm' ? (
+    ) : msg.fileType == 'video/mp4' || msg.fileType == 'video/webm' ? (
       <>
         <Typography variant="body2" sx={{ fontWeight: 500 }}>{msg.fileName || 'Unnamed File'}</Typography>
         <video controls src={msg.file} style={{ width: '100%' }} />
